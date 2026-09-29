@@ -182,10 +182,51 @@ For the complete 3–5 minute step-by-step presentation script with exact UI act
 
 ---
 
+## 🚀 Run & Download Guide
+
+### 1. Run from Source
+- **Web (Chrome / Edge)** *(Recommended, zero extra setup)*:
+  ```bash
+  flutter pub get
+  flutter run -d chrome
+  ```
+- **Windows Desktop**:
+  ```bash
+  flutter pub get
+  flutter run -d windows
+  ```
+  > **Note**: Building or running on Windows requires **Windows Developer Mode** enabled in system settings (`start ms-settings:developers`) so that Flutter can resolve C++ plugin symlinks. Running with `-d chrome` does not require Developer Mode.
+
+### 2. Serving Web Build Locally
+You can run the compiled production web bundle using Python's built-in HTTP server:
+```powershell
+# Extract the release bundle (if using zip)
+Expand-Archive -Path "dist/synthera-web.zip" -DestinationPath "dist/web"
+
+# Start local HTTP server
+cd dist/web
+python -m http.server 8080
+```
+Then navigate to [`http://localhost:8080`](http://localhost:8080) in your web browser.
+
+### 3. Android APK Download & Installation
+- **From GitHub Releases**: Navigate to the [Releases](https://github.com/Sumitboii/Robotic/releases) page and download `app-release.apk` attached to the latest release tag.
+- **From GitHub Actions**: Go to the **Actions** tab $\to$ select the latest **Build & Release Android APK** workflow run $\to$ download the `synthera-apk` artifact.
+- **Installing on Android (Unknown Sources)**:
+  1. Transfer or download the `.apk` file to your Android device.
+  2. Tap the `.apk` file to install. If prompted with *"For your security, your phone is not allowed to install unknown apps from this source"*:
+     - Tap **Settings** in the dialog (or navigate to **Settings > Apps > Special app access > Install unknown apps**).
+     - Select your browser / file manager and enable **Allow from this source**.
+  3. Return to the installer and tap **Install**.
+  > **Verification Status**: The Android APK is built purely in cloud CI via GitHub Actions (`.github/workflows/build-apk.yml`) and has not been tested on a physical Android device.
+
+---
+
 ## ⚠️ Known Limitations
 
-1. **Host Android Tooling**: The local development machine environment lacks the Android SDK / Android Studio toolchain (`ANDROID_HOME`), preventing direct native APK builds in this specific environment (`flutter doctor` confirms "Unable to locate Android SDK"). Release compilation was verified via Flutter Web (`flutter build web --release`).
-2. **Hardware BLE Peripheral**: `BleDeviceService` is an architectural blueprint implementing the `DeviceService` contract with defined GATT UUIDs and canonical `KEY:VALUE` wire protocol serialization; it has not been tested against a physical ESP32 breadboard peripheral.
+1. **Host Android Tooling & Cloud APK Build**: The local development machine environment lacks the Android SDK / Android Studio toolchain (`ANDROID_HOME`), preventing direct native APK builds on this specific host machine (`flutter doctor` confirms "Unable to locate Android SDK"). Android APK compilation is automated via cloud CI (`.github/workflows/build-apk.yml`) and has not been tested on a physical Android device.
+2. **Windows Desktop Symlink Requirement**: Building or running the native Windows desktop executable (`flutter run -d windows` / `flutter build windows`) requires Windows Developer Mode to be enabled in system settings (`start ms-settings:developers`) to support plugin symlink creation.
+3. **Hardware BLE Peripheral**: `BleDeviceService` is an architectural blueprint implementing the `DeviceService` contract with defined GATT UUIDs and canonical `KEY:VALUE` wire protocol serialization; it has not been tested against a physical ESP32 breadboard peripheral.
 
 ---
 
