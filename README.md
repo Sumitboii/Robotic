@@ -13,7 +13,7 @@ This software delivers an end-to-end control console, continuous kinematic physi
 
 ## 📸 Screenshots & Visual QA
 
-> **Note on Screenshot Production:** All screenshots below were generated using Flutter's automated headless rendering engine at $2\times\text{ HiDPI}$ resolution via [`test/screenshot_generator_test.dart`](file:///C:/Users/ssing/OneDrive/Desktop/Project%20Files/Robotic/test/screenshot_generator_test.dart).
+> **Note on Screenshot Production:** All 9 screenshots below are headless golden renders produced programmatically via [`test/screenshot_generator_test.dart`](file:///C:/Users/ssing/OneDrive/Desktop/Project%20Files/Robotic/test/screenshot_generator_test.dart) at $2\times\text{ HiDPI}$ resolution; they are not manual screen captures from a running device.
 
 | Dashboard (Dark Theme) | Calibration Wizard | Device Settings |
 |:---:|:---:|:---:|
@@ -23,18 +23,19 @@ This software delivers an end-to-end control console, continuous kinematic physi
 |:---:|:---:|:---:|
 | ![EMG Mode](docs/screenshots/emg-mode.png) | ![AUTO Mode](docs/screenshots/auto-mode.png) | ![Emergency STOP](docs/screenshots/emergency-stop.png) |
 
-| Disconnected State | Low Battery Warning | Dashboard (Light Theme) |
+| Disconnected State | Low Battery Warning | Dashboard (Variant) |
 |:---:|:---:|:---:|
-| ![Disconnected](docs/screenshots/disconnected.png) | ![Low Battery](docs/screenshots/low-battery.png) | ![Dashboard Light](docs/screenshots/dashboard-dark.png) |
+| ![Disconnected](docs/screenshots/disconnected.png) | ![Low Battery](docs/screenshots/low-battery.png) | ![Dashboard Variant](docs/screenshots/dashboard-dark.png) |
 
 ---
 
 ## 💻 Verified Execution Targets
 
-- **Flutter Web (`Chrome / Edge`)**: Production release bundle compiled and runtime-verified via `flutter build web --release`.
-- **Windows Desktop (`windows-x64`)**: Runtime environment verified with Flutter 3.24.5 test harness and window rendering.
-- **Automated Test Suite (`flutter test`)**: 72/72 unit, widget, and end-to-end integration tests passing with 100% consistency across 3 consecutive runs.
-- **Android SDK Toolchain**: *Not installed on local host machine* (`flutter doctor` reports "Unable to locate Android SDK"). In accordance with evaluation instructions, no mobile APK verification is claimed.
+- **Flutter Web (`Chrome / Edge`)**: Production release bundle compiled and verified via automated build tools (`flutter build web --release`). No manual interactive verification was conducted.
+- **Windows Desktop (`windows-x64`)**: Verification conducted solely via automated test harness (`flutter test`). No manual interactive runtime session was performed in this headless environment.
+- **Automated Test Suite (`flutter test`)**: 73/73 unit, widget, domain, and architecture tests passing with 100% consistency across multiple consecutive runs.
+- **Android Target**: Android SDK was not installed on the host machine; Android APK was not built and mobile runtime was not verified.
+- **Physical BLE Hardware**: BLE communication was verified via architectural abstraction and codec unit tests; no physical ESP32 hardware was connected or tested.
 
 ---
 
@@ -49,8 +50,8 @@ This software delivers an end-to-end control console, continuous kinematic physi
   - **EMG**: Bio-signal edge trigger mode (alternating contractions trigger Close $\leftrightarrow$ Open).
   - **AUTO**: Automated cyclic sequence (`OPEN` $\to$ `HOLD` $\to$ `CLOSE` $\to$ `HOLD`).
 - **🎯 3-Step Guided Mechanical Calibration**: Interactive wizard to measure and store zero-reference open limit and closed stroke endpoints, persisting calibrated limits to local storage.
-- **🔌 Future-Proof BLE GATT Abstraction**: Seamless `DeviceService` contract decoupling the presentation layer from hardware implementations, allowing instant drop-in replacement with `BleDeviceService`.
-- **⚡ Evaluator Demo Suite & Event Logs**: Quick demo drawer to simulate instant EMG spikes, low battery, connection dropouts, and view live firmware serial logs.
+- **🔌 Future-Proof BLE GATT Abstraction**: Seamless `DeviceService` contract decoupling the presentation layer from hardware implementations, allowing direct drop-in replacement with `BleDeviceService`.
+- **⚡ Evaluator Demo Suite & Event Logs**: Quick demo drawer to simulate triggered EMG spikes, low battery conditions, connection dropouts, and view live firmware serial logs.
 
 ---
 

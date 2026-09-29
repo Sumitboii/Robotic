@@ -36,7 +36,7 @@ This timed demonstration script guides evaluators and presenters through the com
   > *"Tapping OPEN actuates the motor at a calibrated rate of 45°/s toward the minimum mechanical limit of 0.0°. Hand state indicates OPENING, with smooth multi-finger tendon extension."*
 * **Action 3:** While moving, tap the central red `STOP` button.
 * **What to Say:**
-  > *"Tapping STOP immediately halts motor PWM actuation with zero millisecond latency, locking the hand in the STOPPED state at its exact current angle."*
+  > *"Tapping STOP immediately halts motor PWM actuation and cancels pending motion timers, locking the hand in the STOPPED state at its exact current angle (as verified by test `STOP command cancels Auto mode scheduling and halts motor immediately`)."*
 * **Action 4:** Tap the green `CLOSE` button.
 * **What to Say:**
   > *"Tapping CLOSE smoothly flexes the fingers toward the 63.0° mechanical stop, reaching CLOSED state."*
