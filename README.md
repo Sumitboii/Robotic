@@ -15,17 +15,17 @@ This software delivers an end-to-end control console, continuous kinematic physi
 
 > **Note on Screenshot Production:** All 9 screenshots below are headless golden renders produced programmatically via [`test/screenshot_generator_test.dart`](file:///C:/Users/ssing/OneDrive/Desktop/Project%20Files/Robotic/test/screenshot_generator_test.dart) at $2\times\text{ HiDPI}$ resolution; they are not manual screen captures from a running device.
 
-| Dashboard (Dark Theme) | Calibration Wizard | Device Settings |
+| Dashboard (Light Theme) | Calibration Wizard | Device Settings |
 |:---:|:---:|:---:|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Calibration](docs/screenshots/calibration.png) | ![Settings](docs/screenshots/settings.png) |
+| ![Dashboard Light](docs/screenshots/dashboard.png) | ![Calibration](docs/screenshots/calibration.png) | ![Settings](docs/screenshots/settings.png) |
 
 | EMG Contraction Mode | AUTO Cyclic Mode | Emergency STOP |
 |:---:|:---:|:---:|
 | ![EMG Mode](docs/screenshots/emg-mode.png) | ![AUTO Mode](docs/screenshots/auto-mode.png) | ![Emergency STOP](docs/screenshots/emergency-stop.png) |
 
-| Disconnected State | Low Battery Warning | Dashboard (Variant) |
+| Disconnected State | Low Battery Warning | Dashboard (Dark Theme) |
 |:---:|:---:|:---:|
-| ![Disconnected](docs/screenshots/disconnected.png) | ![Low Battery](docs/screenshots/low-battery.png) | ![Dashboard Variant](docs/screenshots/dashboard-dark.png) |
+| ![Disconnected](docs/screenshots/disconnected.png) | ![Low Battery](docs/screenshots/low-battery.png) | ![Dashboard Dark](docs/screenshots/dashboard-dark.png) |
 
 ---
 

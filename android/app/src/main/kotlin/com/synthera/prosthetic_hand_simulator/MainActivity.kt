@@ -1,4 +1,4 @@
-package com.example.synthera_prosthetic_hand
+package com.synthera.prosthetic_hand_simulator
 
 import io.flutter.embedding.android.FlutterActivity
 
