@@ -200,12 +200,12 @@ For the complete 3–5 minute step-by-step presentation script with exact UI act
 ### 2. Serving Web Build Locally
 You can run the compiled production web bundle using Python's built-in HTTP server:
 ```powershell
-# Extract the release bundle (if using zip)
-Expand-Archive -Path "dist/synthera-web.zip" -DestinationPath "dist/web"
+# Option A: Serve build directory directly
+python -m http.server 8080 --directory build/web
 
-# Start local HTTP server
-cd dist/web
-python -m http.server 8080
+# Option B: Extract and serve from the release zip
+Expand-Archive -Path "dist/synthera-web.zip" -DestinationPath "dist/web" -Force
+python -m http.server 8080 --directory dist/web
 ```
 Then navigate to [`http://localhost:8080`](http://localhost:8080) in your web browser.
 
