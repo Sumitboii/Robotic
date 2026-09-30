@@ -36,8 +36,10 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build Flutter Web Release
-        run: flutter build web --release --base-href "/Robotic/"
+      - name: Build Flutter Web Releases (Standard and Phone Frame Preview)
+        run: |
+          flutter build web --release --base-href "/Robotic/"
+          flutter build web --release -t lib/main_phone.dart --base-href "/Robotic/phone/" -o build/web/phone
 
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5

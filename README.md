@@ -14,11 +14,12 @@ This application serves as an operator console and digital twin for the Synthera
 
 ---
 
-## 2. Live Demo
+## 2. Live Demos
 
-- **Hosted Web Application**: [https://sumitboii.github.io/Robotic/](https://sumitboii.github.io/Robotic/)
-- *Note:* GitHub Pages must be enabled in repository settings pointing to the `gh-pages` branch or deployment artifact.
-- **Local Web Server**: Run `python -m http.server 8080 --directory build/web` and navigate to `http://localhost:8080`.
+- **Hosted Standard Web App**: [https://sumitboii.github.io/Robotic/](https://sumitboii.github.io/Robotic/)
+- **Hosted iPhone 18 Phone-Frame Preview**: [https://sumitboii.github.io/Robotic/phone/](https://sumitboii.github.io/Robotic/phone/)
+- **Local Standard App**: Run `python -m http.server 8080 --directory build/web` and navigate to `http://localhost:8080`.
+- **Local Phone-Frame Preview**: Run `python -m http.server 8082 --directory build/web_phone` and navigate to `http://localhost:8082`.
 
 ---
 
@@ -29,7 +30,7 @@ This application serves as an operator console and digital twin for the Synthera
 - **fl_chart (`^0.68.0`)**: Performance-optimized oscilloscope plotting library for real-time biosensor streams.
 - **shared_preferences (`^2.2.3`)**: Platform-agnostic persistent key-value storage for device settings and calibration limits.
 - **Inter & IBM Plex Mono Fonts**: Variable typography assets bundled locally for high-contrast clinical legibility and tabular figure alignment.
-- **device_preview (`^1.2.0`)**: Multi-device viewport simulation utility (isolated exclusively to `lib/main_preview.dart`).
+- **Custom Vector Bionic Kinematics & Phone Frame**: Pure Dart/Flutter hardware frame renderer (`lib/presentation/preview/phone_frame.dart`) and multi-phalange mechanical hand painter (`lib/presentation/widgets/hand_visualizer.dart`) with zero third-party device frame dependencies.
 
 ---
 
@@ -137,18 +138,50 @@ flutter pub get
 # Run test suite
 flutter test
 
-# Run application on Chrome / Web
+# Run standard web application
 flutter run -d chrome
+
+# Run realistic iPhone 18 phone-frame preview
+flutter run -d chrome -t lib/main_phone.dart
 
 # Run application on Windows desktop
 flutter run -d windows
 ```
 
+### Open on Your Real Phone
+1. **Via GitHub Pages**: Open [https://sumitboii.github.io/Robotic/](https://sumitboii.github.io/Robotic/) directly in Safari (iOS) or Chrome (Android). On viewports $< 500\,\text{pt}$, the application automatically detects mobile screen dimensions and renders full-screen natively without desktop borders.
+2. **Via Local Wi-Fi Network**:
+   ```bash
+   python -m http.server 8090 --bind 0.0.0.0 --directory build/web
+   ```
+   Open `http://<YOUR-PC-IP>:8090` on your smartphone connected to the same Wi-Fi.
+3. **PWA Home Screen Installation**: Tap "Share" $\to$ "Add to Home Screen" on iOS Safari or "Install App" in Android Chrome for a native full-screen standalone experience.
+
 For complete test suite details and mutation test documentation, see [docs/TESTING.md](docs/TESTING.md).
 
 ---
 
-## 8. Screenshots
+## 8. High-Fidelity Bionic Hand & iPhone 18 Previews
+
+### Realistic Vector Robotic Prosthetic Hand (Phalange Kinematics)
+Rendered entirely with pure Flutter vector graphics and organic staggered mechanical easing ($0^\circ \to 63^\circ$):
+
+| Hand Open ($0^\circ$) | Hand Half-Grip ($31.5^\circ$) | Hand Closed ($63.0^\circ$) |
+|:---:|:---:|:---:|
+| ![Hand Open](docs/screenshots/hand/hand-open-dark.png) | ![Hand Half](docs/screenshots/hand/hand-half-dark.png) | ![Hand Closed](docs/screenshots/hand/hand-closed-dark.png) |
+
+### iPhone 18 Pro & Pro Max Hardware Frame Previews
+Pixel-perfect $402\times 874\,\text{pt}$ and $440\times 956\,\text{pt}$ physical simulations with Dynamic Island cutout, hardware buttons, safe areas, status bar, and home indicator:
+
+| iPhone 18 Pro Dashboard (Dark) | iPhone 18 Pro Dashboard (Light) | iPhone 18 Pro Calibration |
+|:---:|:---:|:---:|
+| ![iPhone 18 Pro Dark](docs/screenshots/phone/iphone18pro-dashboard-dark.png) | ![iPhone 18 Pro Light](docs/screenshots/phone/iphone18pro-dashboard-light.png) | ![iPhone 18 Pro Calibration](docs/screenshots/phone/iphone18pro-calibration.png) |
+
+| iPhone 18 Pro Settings | iPhone 18 Pro Low Battery | iPhone 18 Pro Max Dashboard |
+|:---:|:---:|:---:|
+| ![iPhone 18 Pro Settings](docs/screenshots/phone/iphone18pro-settings.png) | ![iPhone 18 Pro Low Battery](docs/screenshots/phone/iphone18pro-low-battery.png) | ![iPhone 18 Pro Max](docs/screenshots/phone/iphone18promax-dashboard.png) |
+
+### Functional Application States (Clinical Layouts)
 
 | Dashboard (Light) | Dashboard (Dark) | Calibration Wizard |
 |:---:|:---:|:---:|
@@ -166,7 +199,7 @@ For complete test suite details and mutation test documentation, see [docs/TESTI
 |:---:|:---:|:---:|
 | ![Disconnected](docs/screenshots/disconnected.png) | ![Settings](docs/screenshots/settings.png) | ![Calibration Complete](docs/screenshots/calibration-complete.png) |
 
-*Note on screenshot production: All screenshots are programmatic golden renders generated via `test/screenshot_generator_test.dart`.*
+*Note on screenshot production: All 53 screenshots are programmatic golden renders generated deterministically via `test/screenshot_generator_test.dart` and `test/presentation/phone_screenshot_generator_test.dart`.*
 
 ---
 

@@ -364,8 +364,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                   // 1. Connection Status Banner
                   ConnectionBanner(
-                    deviceName:
-                        settings?.deviceName ?? telemetry.deviceName,
+                    deviceName: settings?.deviceName ?? telemetry.deviceName,
                     connectionState: connectionState,
                     onReconnect: () => deviceService.reconnect(),
                     onDisconnect: () => deviceService.disconnect(),
