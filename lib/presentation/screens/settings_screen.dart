@@ -6,6 +6,10 @@ import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/models/device_settings.dart';
 import '../../domain/models/operating_mode.dart';
+import '../widgets/common/app_card.dart';
+import '../widgets/common/danger_button.dart';
+import '../widgets/common/primary_button.dart';
+import '../widgets/common/section_header.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -82,7 +86,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(validationError),
-          backgroundColor: AppTheme.crimson,
+          backgroundColor: AppColors.emergencyRed,
         ),
       );
       return;
@@ -107,7 +111,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           content: Text(success
               ? 'Settings saved & synchronized to device successfully.'
               : 'Failed to save settings.'),
-          backgroundColor: success ? AppTheme.mint : AppTheme.crimson,
+          backgroundColor: success
+              ? (Theme.of(context).brightness == Brightness.dark
+                  ? AppColors.successDark
+                  : AppColors.successLight)
+              : AppColors.emergencyRed,
         ),
       );
     }
@@ -128,7 +136,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.crimson),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.emergencyRed),
             child: const Text('RESET'),
           ),
         ],
@@ -145,9 +154,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Factory defaults restored.'),
-            backgroundColor: AppTheme.cyan,
+          SnackBar(
+            content: const Text('Factory defaults restored.'),
+            backgroundColor: Theme.of(context).brightness == Brightness.dark
+                ? AppColors.primaryDark
+                : AppColors.primaryLight,
           ),
         );
       }
@@ -158,17 +169,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final settingsAsync = ref.watch(settingsNotifierProvider);
     final currentThemeMode = ref.watch(themeModeProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'SETTINGS',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
+        title: const Text('SETTINGS'),
         actions: [
           IconButton(
             tooltip: 'Reset Defaults',
-            icon: const Icon(Icons.restart_alt, color: Color(0xFF90A4AE)),
+            icon: Icon(
+              Icons.restart_alt,
+              color: isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.lightTextSecondary,
+            ),
             onPressed: _handleReset,
           ),
         ],
@@ -182,221 +196,315 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           return SafeArea(
             child: Form(
               key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  // 1. Device Profile Card
-                  _buildSectionHeader('DEVICE IDENTITY'),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Device Name / Model',
-                      prefixIcon: Icon(Icons.devices, color: AppTheme.cyan),
-                    ),
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return 'Device name cannot be blank.';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-
-                  // 2. Motion & Kinematic Limits
-                  _buildSectionHeader('MECHANICAL MOTION LIMITS'),
-                  const SizedBox(height: 8),
-                  Row(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 960),
+                  child: ListView(
+                    padding: AppSpacing.edgeInsetsScreen,
                     children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _minAngleController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
-                          decoration: const InputDecoration(
-                            labelText: 'Min Angle (OPEN)',
-                            suffixText: '°',
-                          ),
-                          validator: (val) {
-                            final num = double.tryParse(val ?? '');
-                            if (num == null) {
-                              return 'Enter valid angle';
-                            }
-                            if (num < AppConstants.absoluteMinAngle ||
-                                num > AppConstants.absoluteMaxAngle) {
-                              return '${AppConstants.absoluteMinAngle}°-${AppConstants.absoluteMaxAngle}°';
-                            }
-                            return null;
-                          },
+                      // 1. Device Identity Card
+                      AppCard(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionHeader(
+                              title: 'DEVICE IDENTITY',
+                              subtitle:
+                                  'Firmware identification & BLE advertising broadcast name',
+                              icon: Icons.devices,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            TextFormField(
+                              controller: _nameController,
+                              decoration: InputDecoration(
+                                labelText: 'Device Name / Model',
+                                prefixIcon: Icon(
+                                  Icons.badge_outlined,
+                                  color: isDark
+                                      ? AppColors.primaryDark
+                                      : AppColors.primaryLight,
+                                ),
+                              ),
+                              validator: (val) {
+                                if (val == null || val.trim().isEmpty) {
+                                  return 'Device name cannot be blank.';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _maxAngleController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
-                          decoration: const InputDecoration(
-                            labelText: 'Max Angle (CLOSED)',
-                            suffixText: '°',
-                          ),
-                          validator: (val) {
-                            final max = double.tryParse(val ?? '');
-                            final min =
-                                double.tryParse(_minAngleController.text);
-                            if (max == null) {
-                              return 'Enter valid angle';
-                            }
-                            if (max < AppConstants.absoluteMinAngle ||
-                                max > AppConstants.absoluteMaxAngle) {
-                              return '${AppConstants.absoluteMinAngle}°-${AppConstants.absoluteMaxAngle}°';
-                            }
-                            if (min != null && max <= min) {
-                              return 'Must be > Min';
-                            }
-                            return null;
-                          },
+                      const SizedBox(height: AppSpacing.lg),
+
+                      // 2. Mechanical Motion Limits Card
+                      AppCard(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionHeader(
+                              title: 'MECHANICAL MOTION LIMITS',
+                              subtitle:
+                                  'Physical actuator stroke boundaries and calibration range',
+                              icon: Icons.precision_manufacturing,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _minAngleController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Min Angle (OPEN)',
+                                      suffixText: '°',
+                                      helperText: 'Physical open rest limit',
+                                    ),
+                                    validator: (val) {
+                                      final num = double.tryParse(val ?? '');
+                                      if (num == null) {
+                                        return 'Enter valid angle';
+                                      }
+                                      if (num < AppConstants.absoluteMinAngle ||
+                                          num > AppConstants.absoluteMaxAngle) {
+                                        return '${AppConstants.absoluteMinAngle}°-${AppConstants.absoluteMaxAngle}°';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _maxAngleController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Max Angle (CLOSED)',
+                                      suffixText: '°',
+                                      helperText: 'Full closed grip stroke',
+                                    ),
+                                    validator: (val) {
+                                      final max = double.tryParse(val ?? '');
+                                      final min = double.tryParse(
+                                          _minAngleController.text);
+                                      if (max == null) {
+                                        return 'Enter valid angle';
+                                      }
+                                      if (max < AppConstants.absoluteMinAngle ||
+                                          max > AppConstants.absoluteMaxAngle) {
+                                        return '${AppConstants.absoluteMinAngle}°-${AppConstants.absoluteMaxAngle}°';
+                                      }
+                                      if (min != null && max <= min) {
+                                        return 'Must be > Min';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
+                      const SizedBox(height: AppSpacing.lg),
+
+                      // 3. Biosensor & Power Thresholds Card
+                      AppCard(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionHeader(
+                              title: 'BIOSENSOR & POWER THRESHOLDS',
+                              subtitle:
+                                  'EMG contraction sensitivity & critical battery cutoff',
+                              icon: Icons.tune,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            TextFormField(
+                              controller: _emgThresholdController,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: 'EMG Contraction Trigger Threshold',
+                                suffixText: 'μV',
+                                helperText:
+                                    'Recommended clinical range: 100 - 180 μV',
+                                prefixIcon: Icon(
+                                  Icons.sensors,
+                                  color: isDark
+                                      ? AppColors.primaryDark
+                                      : AppColors.primaryLight,
+                                ),
+                              ),
+                              validator: (val) {
+                                final num = double.tryParse(val ?? '');
+                                if (num == null) {
+                                  return 'Enter numeric value';
+                                }
+                                if (num < AppConstants.minEmgThreshold ||
+                                    num > AppConstants.maxEmgThreshold) {
+                                  return 'Range: ${AppConstants.minEmgThreshold.toInt()} - ${AppConstants.maxEmgThreshold.toInt()}';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            TextFormField(
+                              controller: _batteryWarningController,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: 'Battery Warning Threshold',
+                                suffixText: '%',
+                                helperText:
+                                    'Alert triggered when power drops below this percentage',
+                                prefixIcon: Icon(
+                                  Icons.battery_alert,
+                                  color: isDark
+                                      ? AppColors.warningDark
+                                      : AppColors.warningLight,
+                                ),
+                              ),
+                              validator: (val) {
+                                final num = double.tryParse(val ?? '');
+                                if (num == null) {
+                                  return 'Enter percentage';
+                                }
+                                if (num < 5 || num > 50) {
+                                  return 'Must be between 5% - 50%';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+
+                      // 4. Default Operating Mode Card
+                      AppCard(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionHeader(
+                              title: 'DEFAULT OPERATING MODE',
+                              subtitle:
+                                  'Firmware boot & reconnect initial control profile',
+                              icon: Icons.settings_suggest,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            DropdownButtonFormField<OperatingMode>(
+                              value: _selectedMode,
+                              decoration: InputDecoration(
+                                labelText: 'Startup Mode',
+                                prefixIcon: Icon(
+                                  Icons.tune,
+                                  color: isDark
+                                      ? AppColors.primaryDark
+                                      : AppColors.primaryLight,
+                                ),
+                              ),
+                              items: OperatingMode.values.map((mode) {
+                                return DropdownMenuItem(
+                                  value: mode,
+                                  child: Text(mode.displayName),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _selectedMode = val);
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+
+                      // 5. Application Appearance Card
+                      AppCard(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionHeader(
+                              title: 'APPLICATION APPEARANCE',
+                              subtitle:
+                                  'Clinical dark slate or warm off-white theme selection',
+                              icon: Icons.palette_outlined,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            SegmentedButton<ThemeMode>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: ThemeMode.dark,
+                                  icon: Icon(Icons.dark_mode),
+                                  label: Text('Dark (Telemetry)'),
+                                ),
+                                ButtonSegment(
+                                  value: ThemeMode.light,
+                                  icon: Icon(Icons.light_mode),
+                                  label: Text('Light (Clinical)'),
+                                ),
+                              ],
+                              selected: {currentThemeMode},
+                              onSelectionChanged: (selection) {
+                                ref
+                                    .read(themeModeProvider.notifier)
+                                    .setThemeMode(selection.first);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+
+                      // 6. Danger Zone Card
+                      AppCard(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        borderColor: AppColors.emergencyRed.withAlpha(120),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionHeader(
+                              title: 'DANGER ZONE',
+                              subtitle:
+                                  'Restore hardware configuration to factory defaults',
+                              icon: Icons.warning_amber_rounded,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            DangerButton(
+                              label: 'RESET FACTORY DEFAULTS',
+                              icon: Icons.restart_alt,
+                              height: 48,
+                              onPressed: _handleReset,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // Primary Sticky Save Action Button
+                      PrimaryButton(
+                        label: 'SAVE & APPLY SETTINGS',
+                        icon: Icons.save,
+                        height: 52,
+                        onPressed: _handleSave,
+                      ),
+                      const SizedBox(height: AppSpacing.xxl),
                     ],
                   ),
-                  const SizedBox(height: 20),
-
-                  // 3. Biosensor Thresholds
-                  _buildSectionHeader('BIOSENSOR & POWER THRESHOLDS'),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _emgThresholdController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'EMG Contraction Trigger Threshold',
-                      suffixText: 'μV',
-                      helperText: 'Recommended range: 100 - 180 μV',
-                      prefixIcon: Icon(Icons.sensors, color: AppTheme.cyan),
-                    ),
-                    validator: (val) {
-                      final num = double.tryParse(val ?? '');
-                      if (num == null) {
-                        return 'Enter numeric value';
-                      }
-                      if (num < AppConstants.minEmgThreshold ||
-                          num > AppConstants.maxEmgThreshold) {
-                        return 'Range: ${AppConstants.minEmgThreshold.toInt()} - ${AppConstants.maxEmgThreshold.toInt()}';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _batteryWarningController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Battery Warning Threshold',
-                      suffixText: '%',
-                      helperText: 'Alert triggered when level drops below this',
-                      prefixIcon:
-                          Icon(Icons.battery_alert, color: AppTheme.amber),
-                    ),
-                    validator: (val) {
-                      final num = double.tryParse(val ?? '');
-                      if (num == null) {
-                        return 'Enter percentage';
-                      }
-                      if (num < 5 || num > 50) {
-                        return 'Must be between 5% - 50%';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-
-                  // 4. Default Mode
-                  _buildSectionHeader('DEFAULT OPERATING MODE'),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<OperatingMode>(
-                    value: _selectedMode,
-                    decoration: const InputDecoration(
-                      labelText: 'Startup Mode',
-                      prefixIcon: Icon(Icons.tune, color: AppTheme.cyan),
-                    ),
-                    items: OperatingMode.values.map((mode) {
-                      return DropdownMenuItem(
-                        value: mode,
-                        child: Text(mode.displayName),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _selectedMode = val);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 20),
-
-                  // 5. App Theme Preference
-                  _buildSectionHeader('APPLICATION APPEARANCE'),
-                  const SizedBox(height: 8),
-                  SegmentedButton<ThemeMode>(
-                    segments: const [
-                      ButtonSegment(
-                        value: ThemeMode.dark,
-                        icon: Icon(Icons.dark_mode),
-                        label: Text('Dark (Cyber)'),
-                      ),
-                      ButtonSegment(
-                        value: ThemeMode.light,
-                        icon: Icon(Icons.light_mode),
-                        label: Text('Light (Clean)'),
-                      ),
-                    ],
-                    selected: {currentThemeMode},
-                    onSelectionChanged: (selection) {
-                      ref
-                          .read(themeModeProvider.notifier)
-                          .setThemeMode(selection.first);
-                    },
-                  ),
-                  const SizedBox(height: 28),
-
-                  // Save Button
-                  ElevatedButton.icon(
-                    onPressed: _handleSave,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.cyan,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    icon: const Icon(Icons.save, size: 20),
-                    label: const Text(
-                      'SAVE & APPLY SETTINGS',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                ),
               ),
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.bold,
-        color: Color(0xFF90A4AE),
-        letterSpacing: 1.0,
       ),
     );
   }

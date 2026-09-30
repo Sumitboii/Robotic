@@ -1,12 +1,12 @@
 {
-    "name": "synthera_prosthetic_hand",
-    "short_name": "synthera_prosthetic_hand",
+    "name": "Synthera Robotics Prosthetic Hand Simulator",
+    "short_name": "Synthera",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#0A0E17",
+    "theme_color": "#00E5FF",
+    "description": "Clinical Companion Application & Embedded Kinematics Simulator for Synthera DAKSH-01 Prosthetic Hand.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

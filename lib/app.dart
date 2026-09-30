@@ -6,7 +6,14 @@ import 'core/theme/app_theme.dart';
 import 'presentation/navigation/app_router.dart';
 
 class SyntheraProstheticApp extends ConsumerWidget {
-  const SyntheraProstheticApp({super.key});
+  final Widget Function(BuildContext, Widget?)? builder;
+  final Locale? locale;
+
+  const SyntheraProstheticApp({
+    super.key,
+    this.builder,
+    this.locale,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -18,6 +25,8 @@ class SyntheraProstheticApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
+      locale: locale,
+      builder: builder,
       home: const MainNavigationShell(),
     );
   }

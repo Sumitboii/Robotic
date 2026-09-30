@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/models/connection_state.dart';
+import 'common/app_card.dart';
+import 'common/status_chip.dart';
 
+/// Clinical Device Connection Status Banner.
+///
+/// Displays device identifier, firmware tag, multi-modal status badge,
+/// and clear reconnect/disconnect actions.
 class ConnectionBanner extends StatelessWidget {
   final String deviceName;
   final DeviceConnectionState connectionState;
@@ -24,144 +30,153 @@ class ConnectionBanner extends StatelessWidget {
     IconData stateIcon;
     switch (connectionState) {
       case DeviceConnectionState.connected:
-        stateColor = AppTheme.mint;
+        stateColor = isDark ? AppColors.successDark : AppColors.successLight;
         stateIcon = Icons.bluetooth_connected;
         break;
       case DeviceConnectionState.connecting:
       case DeviceConnectionState.reconnecting:
-        stateColor = AppTheme.amber;
+        stateColor = isDark ? AppColors.warningDark : AppColors.warningLight;
         stateIcon = Icons.bluetooth_searching;
         break;
       case DeviceConnectionState.disconnected:
       case DeviceConnectionState.connectionFailed:
-        stateColor = AppTheme.crimson;
+        stateColor = AppColors.emergencyRed;
         stateIcon = Icons.bluetooth_disabled;
         break;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : AppTheme.lightSurface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+    final isDisconnected = connectionState.isDisconnected;
+    final isTransitioning = connectionState.isTransitioning;
+
+    return Semantics(
+      label:
+          'Device $deviceName connection state is ${connectionState.displayName}',
+      container: true,
+      child: AppCard(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
         ),
-      ),
-      child: Row(
-        children: [
-          // Device Icon
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: stateColor.withAlpha(isDark ? 40 : 30),
-              borderRadius: BorderRadius.circular(10),
+        borderColor: isDisconnected
+            ? AppColors.emergencyRed.withAlpha(140)
+            : (isTransitioning
+                ? (isDark ? AppColors.warningDark : AppColors.warningLight)
+                    .withAlpha(140)
+                : null),
+        borderWidth: (isDisconnected || isTransitioning) ? 1.5 : 1.0,
+        child: Row(
+          children: [
+            // Status Icon Container
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: stateColor.withAlpha(isDark ? 40 : 25),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: stateColor.withAlpha(isDark ? 100 : 70),
+                  width: 1.0,
+                ),
+              ),
+              child: Icon(stateIcon, size: 20, color: stateColor),
             ),
-            child: Icon(stateIcon, size: 20, color: stateColor),
-          ),
-          const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
 
-          // Device & Status Text
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        deviceName,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'monospace',
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: isDark ? Colors.white : Colors.black87,
+            // Device Profile & Connection State
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          deviceName,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: AppTypography.monoFontFamily,
+                            fontFamilyFallback: AppTypography.monoFontFallbacks,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: isDark
+                                ? AppColors.darkTextPrimary
+                                : AppColors.lightTextPrimary,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white10 : Colors.black12,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'ESP32 SIM',
-                        style: TextStyle(
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF90A4AE),
+                      const SizedBox(width: AppSpacing.xs),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white10 : Colors.black12,
+                          borderRadius: BorderRadius.circular(AppRadius.xs),
+                        ),
+                        child: Text(
+                          'ESP32 SIM',
+                          style: AppTypography.labelSmall(
+                            color: isDark
+                                ? AppColors.darkTextMuted
+                                : AppColors.lightTextMuted,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: stateColor,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      connectionState.displayName,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: stateColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  StatusChip(
+                    label: connectionState.displayName,
+                    icon: null,
+                    color: stateColor,
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          // Action Button (Reconnect or Disconnect)
-          if (connectionState.isDisconnected)
-            ElevatedButton.icon(
-              onPressed: onReconnect,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.blue,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+            // Action / State Indicator
+            if (isDisconnected)
+              ElevatedButton.icon(
+                onPressed: onReconnect,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                  foregroundColor: isDark ? Colors.black : Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
+                  minimumSize: const Size(0, 38),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
                 ),
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text(
+                  'RECONNECT',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+              )
+            else if (isTransitioning)
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(stateColor),
+                ),
+              )
+            else
+              IconButton(
+                tooltip: 'Disconnect Simulator',
+                icon: const Icon(Icons.link_off, size: 20),
+                color:
+                    isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                onPressed: onDisconnect,
               ),
-              icon: const Icon(Icons.refresh, size: 16),
-              label: const Text(
-                'RECONNECT',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-            )
-          else if (connectionState.isTransitioning)
-            const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.amber),
-              ),
-            )
-          else
-            IconButton(
-              tooltip: 'Simulate Disconnect',
-              icon: const Icon(Icons.link_off, size: 20),
-              color: const Color(0xFF90A4AE),
-              onPressed: onDisconnect,
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

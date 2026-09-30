@@ -1,7 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/models/hand_state.dart';
+import 'common/app_card.dart';
+import 'common/danger_button.dart';
 
+/// Clinical Actuator Control Panel.
+///
+/// Houses OPEN, CLOSE, and priority STOP controls with clear visual
+/// hierarchy, disabled state annotations, and tactile haptic confirmation.
 class ControlPanel extends StatelessWidget {
   final HandState handState;
   final bool isConnected;
@@ -20,6 +28,14 @@ class ControlPanel extends StatelessWidget {
     required this.onStop,
   });
 
+  void _triggerHaptic() {
+    if (!kIsWeb) {
+      try {
+        HapticFeedback.mediumImpact();
+      } catch (_) {}
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -29,164 +45,183 @@ class ControlPanel extends StatelessWidget {
     final isClosing = handState == HandState.closing;
     final isStopped = handState == HandState.stopped;
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
-        ),
-      ),
+    String? disabledReason;
+    if (!isConnected) {
+      disabledReason = 'DISCONNECTED';
+    } else if (isBatteryDepleted) {
+      disabledReason = 'BATTERY DEPLETED (0%)';
+    }
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Header Bar
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Flexible(
+              Flexible(
                 child: Text(
                   'ACTUATOR CONTROLS',
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF90A4AE),
-                    letterSpacing: 0.8,
+                  style: AppTypography.labelLarge(
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
                   ),
                 ),
               ),
-              if (isBatteryDepleted)
-                const Text(
-                  'LOCKED: 0%',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.crimson,
+              if (disabledReason != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.emergencyRed.withAlpha(isDark ? 50 : 30),
+                    borderRadius: BorderRadius.circular(AppRadius.xs),
+                    border: Border.all(
+                      color: AppColors.emergencyRed.withAlpha(120),
+                    ),
+                  ),
+                  child: Text(
+                    disabledReason,
+                    style: AppTypography.labelSmall(
+                      color: AppColors.emergencyRed,
+                    ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
+
+          // Primary Directional Motion Controls (OPEN / CLOSE)
           Row(
             children: [
               // OPEN BUTTON
               Expanded(
-                flex: 3,
-                child: ElevatedButton.icon(
-                  onPressed: enabled ? onOpen : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isOpening
-                        ? AppTheme.mint
-                        : (isDark
-                            ? const Color(0xFF1E3326)
-                            : const Color(0xFFE8F5E9)),
-                    foregroundColor: isOpening
-                        ? Colors.black
-                        : (isDark ? AppTheme.mint : const Color(0xFF2E7D32)),
-                    elevation: isOpening ? 4 : 0,
-                    side: BorderSide(
-                      color: isOpening
-                          ? AppTheme.mint
-                          : AppTheme.mint.withAlpha(100),
-                      width: isOpening ? 2.0 : 1.0,
+                child: SizedBox(
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: enabled
+                        ? () {
+                            _triggerHaptic();
+                            onOpen();
+                          }
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isOpening
+                          ? (isDark
+                              ? AppColors.successDark
+                              : AppColors.successLight)
+                          : (isDark
+                              ? const Color(0xFF132A22)
+                              : const Color(0xFFE6F4EA)),
+                      foregroundColor: isOpening
+                          ? Colors.black
+                          : (isDark
+                              ? AppColors.successDark
+                              : const Color(0xFF137333)),
+                      elevation: isOpening ? 3 : 0,
+                      side: BorderSide(
+                        color: isOpening
+                            ? (isDark
+                                ? AppColors.successDark
+                                : AppColors.successLight)
+                            : (isDark
+                                ? AppColors.successDark.withAlpha(90)
+                                : const Color(0xFF81C995)),
+                        width: isOpening ? 2.0 : 1.2,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.xs,
+                      ),
                     ),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: const Icon(Icons.keyboard_double_arrow_left, size: 16),
-                  label: const Text(
-                    'OPEN',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-
-              // EMERGENCY STOP BUTTON (Priority center styling)
-              Expanded(
-                flex: 4,
-                child: ElevatedButton.icon(
-                  onPressed: isConnected ? onStop : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isStopped
-                        ? AppTheme.crimson
-                        : (isDark
-                            ? const Color(0xFF3E171E)
-                            : const Color(0xFFFFEBEE)),
-                    foregroundColor: isStopped
-                        ? Colors.white
-                        : (isDark ? AppTheme.crimson : const Color(0xFFC62828)),
-                    elevation: isStopped ? 6 : 1,
-                    side: BorderSide(
-                      color: isStopped ? Colors.white : AppTheme.crimson,
-                      width: 2.0,
-                    ),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: const Icon(Icons.stop_circle, size: 18),
-                  label: const Text(
-                    'STOP',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
-                      letterSpacing: 1.0,
+                    icon: const Icon(Icons.arrow_back_ios_new, size: 16),
+                    label: const Text(
+                      'OPEN',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        letterSpacing: 0.8,
+                      ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: AppSpacing.md),
 
               // CLOSE BUTTON
               Expanded(
-                flex: 3,
-                child: ElevatedButton.icon(
-                  onPressed: enabled ? onClose : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isClosing
-                        ? AppTheme.cyan
-                        : (isDark
-                            ? const Color(0xFF143142)
-                            : const Color(0xFFE0F7FA)),
-                    foregroundColor: isClosing
-                        ? Colors.black
-                        : (isDark ? AppTheme.cyan : const Color(0xFF00838F)),
-                    elevation: isClosing ? 4 : 0,
-                    side: BorderSide(
-                      color: isClosing
-                          ? AppTheme.cyan
-                          : AppTheme.cyan.withAlpha(100),
-                      width: isClosing ? 2.0 : 1.0,
+                child: SizedBox(
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: enabled
+                        ? () {
+                            _triggerHaptic();
+                            onClose();
+                          }
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isClosing
+                          ? (isDark
+                              ? AppColors.primaryDark
+                              : AppColors.primaryLight)
+                          : (isDark
+                              ? const Color(0xFF0E2533)
+                              : const Color(0xFFE0F2FE)),
+                      foregroundColor: isClosing
+                          ? Colors.black
+                          : (isDark
+                              ? AppColors.primaryDark
+                              : const Color(0xFF0369A1)),
+                      elevation: isClosing ? 3 : 0,
+                      side: BorderSide(
+                        color: isClosing
+                            ? (isDark
+                                ? AppColors.primaryDark
+                                : AppColors.primaryLight)
+                            : (isDark
+                                ? AppColors.primaryDark.withAlpha(90)
+                                : const Color(0xFF7DD3FC)),
+                        width: isClosing ? 2.0 : 1.2,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.xs,
+                      ),
                     ),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: const Icon(Icons.keyboard_double_arrow_right, size: 16),
-                  label: const Text(
-                    'CLOSE',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      letterSpacing: 0.5,
+                    icon: const Icon(Icons.arrow_forward_ios, size: 16),
+                    label: const Text(
+                      'CLOSE',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        letterSpacing: 0.8,
+                      ),
                     ),
                   ),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          // EMERGENCY STOP BUTTON (Distinct Clinical Red, Minimum 56dp Height)
+          DangerButton(
+            label: 'STOP',
+            isActive: isStopped,
+            height: 56.0,
+            onPressed: isConnected ? onStop : null,
+            tooltip: 'Halt all motor drive actuation immediately',
           ),
         ],
       ),

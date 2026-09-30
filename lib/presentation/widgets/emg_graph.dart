@@ -1,7 +1,14 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
+import 'common/app_card.dart';
+import 'common/status_chip.dart';
 
+/// Clinical Real-Time Biosensor (EMG) Oscilloscope Graph.
+///
+/// Features smooth continuous Bezier curve rendering, soft gradient fill under curve,
+/// labeled dashed threshold limit line, high-contrast spike trigger highlighting,
+/// and [RepaintBoundary] isolation for 20Hz rendering performance.
 class EmgGraph extends StatelessWidget {
   final List<double> emgHistory;
   final double emgThreshold;
@@ -13,7 +20,7 @@ class EmgGraph extends StatelessWidget {
     required this.emgHistory,
     required this.emgThreshold,
     required this.currentEmg,
-    this.height = 140.0,
+    this.height = 160.0,
   });
 
   @override
@@ -21,122 +28,100 @@ class EmgGraph extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isOverThreshold = currentEmg >= emgThreshold;
 
-    return Container(
-      height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isOverThreshold
-              ? AppTheme.crimson.withAlpha(153)
-              : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
-          width: isOverThreshold ? 1.5 : 1.0,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Row with Responsive Fitting
-          Row(
-            children: [
-              Expanded(
-                child: Row(
+    final primaryColor = isOverThreshold
+        ? AppColors.dangerDark
+        : (isDark ? AppColors.primaryDark : AppColors.primaryLight);
+
+    final statusText = isOverThreshold ? 'SPIKE' : 'IDLE';
+
+    return RepaintBoundary(
+      child: Semantics(
+        label:
+            'EMG signal ${currentEmg.toStringAsFixed(0)} microvolts, threshold ${emgThreshold.toStringAsFixed(0)} microvolts, state $statusText',
+        container: true,
+        child: AppCard(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          borderColor:
+              isOverThreshold ? AppColors.dangerDark.withAlpha(160) : null,
+          borderWidth: isOverThreshold ? 1.5 : 1.0,
+          child: SizedBox(
+            height: height - 24,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Bar with Signal Stats & Status
+                Row(
                   children: [
-                    Icon(
-                      Icons.show_chart,
-                      size: 16,
-                      color: isDark ? AppTheme.cyan : const Color(0xFF0091EA),
-                    ),
-                    const SizedBox(width: 6),
-                    const Flexible(
+                    Icon(Icons.show_chart, size: 16, color: primaryColor),
+                    const SizedBox(width: AppSpacing.xs),
+                    Expanded(
                       child: Text(
                         'EMG SIGNAL',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF90A4AE),
-                          letterSpacing: 0.8,
+                        style: AppTypography.labelMedium(
+                          color: isDark
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    StatusChip(
+                      label: statusText,
+                      icon: isOverThreshold ? Icons.bolt : Icons.sensors,
+                      color: isOverThreshold
+                          ? AppColors.dangerDark
+                          : (isDark
+                              ? AppColors.successDark
+                              : AppColors.successLight),
+                    ),
+                    const SizedBox(width: AppSpacing.xs + 2),
+                    Text(
+                      '${currentEmg.toStringAsFixed(0)} μV',
+                      style: AppTypography.monoValueMedium(color: primaryColor),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isOverThreshold
-                      ? AppTheme.crimson.withAlpha(51)
-                      : (isDark ? Colors.white10 : Colors.black12),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color:
-                        isOverThreshold ? AppTheme.crimson : Colors.transparent,
-                  ),
-                ),
-                child: Text(
-                  'THRESH: ${emgThreshold.toStringAsFixed(0)}',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'monospace',
-                    color: isOverThreshold
-                        ? AppTheme.crimson
-                        : const Color(0xFF90A4AE),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                currentEmg.toStringAsFixed(0),
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: isOverThreshold
-                      ? AppTheme.crimson
-                      : (isDark ? AppTheme.cyan : const Color(0xFF0091EA)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.sm),
 
-          // Oscilloscope Waveform View
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: CustomPaint(
-                size: Size.infinite,
-                painter: _EmgWaveformPainter(
-                  history: emgHistory,
-                  threshold: emgThreshold,
-                  isDark: isDark,
-                  isOverThreshold: isOverThreshold,
+                // Oscilloscope Waveform Canvas
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: CustomPaint(
+                      size: Size.infinite,
+                      painter: _ClinicalEmgWaveformPainter(
+                        history: emgHistory,
+                        threshold: emgThreshold,
+                        isDark: isDark,
+                        isOverThreshold: isOverThreshold,
+                        primaryColor: primaryColor,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _EmgWaveformPainter extends CustomPainter {
+class _ClinicalEmgWaveformPainter extends CustomPainter {
   final List<double> history;
   final double threshold;
   final bool isDark;
   final bool isOverThreshold;
+  final Color primaryColor;
 
-  _EmgWaveformPainter({
+  _ClinicalEmgWaveformPainter({
     required this.history,
     required this.threshold,
     required this.isDark,
     required this.isOverThreshold,
+    required this.primaryColor,
   });
 
   @override
@@ -147,25 +132,30 @@ class _EmgWaveformPainter extends CustomPainter {
     const maxVal = 250.0;
     const range = maxVal - minVal;
 
-    // Draw background grid lines
+    // ── 1. Draw Faint Medical Grid Lines ──
     final gridPaint = Paint()
-      ..color = (isDark ? Colors.white : Colors.black).withAlpha(12)
+      ..color =
+          (isDark ? Colors.white : Colors.black).withAlpha(isDark ? 8 : 12)
       ..strokeWidth = 0.8;
 
-    canvas.drawLine(Offset(0, size.height * 0.25),
-        Offset(size.width, size.height * 0.25), gridPaint);
-    canvas.drawLine(Offset(0, size.height * 0.5),
-        Offset(size.width, size.height * 0.5), gridPaint);
-    canvas.drawLine(Offset(0, size.height * 0.75),
-        Offset(size.width, size.height * 0.75), gridPaint);
+    for (double yRatio in [0.25, 0.50, 0.75]) {
+      final y = size.height * yRatio;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+    for (double xRatio in [0.25, 0.50, 0.75]) {
+      final x = size.width * xRatio;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
 
-    // Draw Threshold Line (Dashed)
-    final threshY = (1.0 - (threshold - minVal) / range) * size.height;
+    // ── 2. Draw Dashed Threshold Line with Callout ──
+    final threshY =
+        (1.0 - (threshold - minVal) / range).clamp(0.0, 1.0) * size.height;
     final threshPaint = Paint()
-      ..color = AppTheme.crimson.withAlpha(180)
+      ..color =
+          (isDark ? AppColors.dangerDark : AppColors.dangerLight).withAlpha(180)
       ..strokeWidth = 1.2;
 
-    const dashWidth = 5.0;
+    const dashWidth = 6.0;
     const dashSpace = 4.0;
     double startX = 0;
     while (startX < size.width) {
@@ -177,15 +167,35 @@ class _EmgWaveformPainter extends CustomPainter {
       startX += dashWidth + dashSpace;
     }
 
-    // Compute Waveform Points
-    final dx = size.width / (history.length - 1);
+    // Threshold baseline text callout
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: 'TH: ${threshold.toStringAsFixed(0)} μV',
+        style: TextStyle(
+          fontFamily: AppTypography.monoFontFamily,
+          fontFamilyFallback: AppTypography.monoFontFallbacks,
+          fontSize: 8.5,
+          fontWeight: FontWeight.w700,
+          color: (isDark ? AppColors.dangerDark : AppColors.dangerLight)
+              .withAlpha(220),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(
+      canvas,
+      Offset(size.width - textPainter.width - 4,
+          (threshY - 12).clamp(2, size.height - 14)),
+    );
+
+    // ── 3. Smooth Bezier Waveform Calculation ──
+    final dx = size.width / math.max(1, history.length - 1);
     final points = <Offset>[];
     for (int i = 0; i < history.length; i++) {
       final normY = (1.0 - (history[i] - minVal) / range).clamp(0.0, 1.0);
       points.add(Offset(i * dx, normY * size.height));
     }
 
-    // Create Waveform Path
     final wavePath = Path();
     final fillPath = Path();
 
@@ -204,48 +214,42 @@ class _EmgWaveformPainter extends CustomPainter {
     fillPath.lineTo(points.last.dx, size.height);
     fillPath.close();
 
-    // Gradient area fill
-    final fillColor = isOverThreshold ? AppTheme.crimson : AppTheme.cyan;
-    final fillGradient = LinearGradient(
+    // ── 4. Gradient Fill Under Waveform ──
+    final fillShader = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
-        fillColor.withAlpha(isDark ? 80 : 50),
-        fillColor.withAlpha(0),
+        primaryColor.withAlpha(isDark ? (isOverThreshold ? 90 : 60) : 40),
+        primaryColor.withAlpha(0),
       ],
-    );
+    ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
     final fillPaint = Paint()
-      ..shader = fillGradient
-          .createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..shader = fillShader
       ..style = PaintingStyle.fill;
-
     canvas.drawPath(fillPath, fillPaint);
 
-    // Stroke line
-    final linePaint = Paint()
-      ..color = fillColor
+    // ── 5. Waveform Stroke Line ──
+    final strokePaint = Paint()
+      ..color = primaryColor
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(wavePath, strokePaint);
 
-    canvas.drawPath(wavePath, linePaint);
-
-    // Latest sample pulse dot
-    final lastPoint = points.last;
-    final dotPaint = Paint()
-      ..color = fillColor
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(lastPoint, 3.5, dotPaint);
+    // ── 6. Active Leading Pulse Dot ──
+    final lastPt = points.last;
+    final dotPaint = Paint()..color = primaryColor;
+    canvas.drawCircle(lastPt, 3.5, dotPaint);
 
     final glowPaint = Paint()
-      ..color = fillColor.withAlpha(100)
+      ..color = primaryColor.withAlpha(90)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.0;
-    canvas.drawCircle(lastPoint, 5.5, glowPaint);
+      ..strokeWidth = 2.5;
+    canvas.drawCircle(lastPt, 6.0, glowPaint);
   }
 
   @override
-  bool shouldRepaint(covariant _EmgWaveformPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _ClinicalEmgWaveformPainter oldDelegate) => true;
 }

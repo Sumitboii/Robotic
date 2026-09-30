@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/providers/device_providers.dart';
 import '../../application/providers/settings_provider.dart';
+import '../../application/providers/theme_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../widgets/battery_indicator.dart';
+import '../widgets/common/metric_tile.dart';
 import '../widgets/connection_banner.dart';
 import '../widgets/control_panel.dart';
 import '../widgets/device_log_sheet.dart';
@@ -23,6 +25,7 @@ class DashboardScreen extends ConsumerWidget {
     final emgHistory = ref.watch(emgHistoryProvider);
     final settingsAsync = ref.watch(settingsNotifierProvider);
     final logs = ref.watch(deviceLogsProvider);
+    final currentThemeMode = ref.watch(themeModeProvider);
 
     final telemetry = telemetryAsync.value ?? deviceService.currentTelemetry;
     final connectionState =
@@ -34,22 +37,33 @@ class DashboardScreen extends ConsumerWidget {
     final minAngle = settings?.minAngle ?? 0.0;
     final maxAngle = settings?.maxAngle ?? 63.0;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(AppSpacing.xs + 2),
               decoration: BoxDecoration(
-                color: AppTheme.cyan.withAlpha(40),
-                borderRadius: BorderRadius.circular(8),
+                color: (isDark ? AppColors.primaryDark : AppColors.primaryLight)
+                    .withAlpha(isDark ? 40 : 25),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(
+                  color:
+                      (isDark ? AppColors.primaryDark : AppColors.primaryLight)
+                          .withAlpha(isDark ? 100 : 60),
+                ),
               ),
-              child: const Icon(Icons.precision_manufacturing,
-                  color: AppTheme.cyan, size: 20),
+              child: Icon(
+                Icons.precision_manufacturing,
+                color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                size: 20,
+              ),
             ),
-            const SizedBox(width: 8),
-            const Flexible(
+            const SizedBox(width: AppSpacing.sm),
+            Flexible(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -58,17 +72,26 @@ class DashboardScreen extends ConsumerWidget {
                     'SYNTHERA ROBOTICS',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
+                      fontFamily: AppTypography.uiFontFamily,
+                      fontFamilyFallback: AppTypography.uiFontFallbacks,
                       fontSize: 13,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1.0,
+                      color: isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
                     ),
                   ),
                   Text(
                     'Prosthetic Hand Simulator',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
+                      fontFamily: AppTypography.uiFontFamily,
+                      fontFamilyFallback: AppTypography.uiFontFallbacks,
                       fontSize: 10,
-                      color: Color(0xFF90A4AE),
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -78,10 +101,32 @@ class DashboardScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          // Theme Toggle
+          IconButton(
+            tooltip: 'Toggle Theme',
+            icon: Icon(
+              currentThemeMode == ThemeMode.dark
+                  ? Icons.light_mode_outlined
+                  : Icons.dark_mode_outlined,
+              size: 20,
+              color: isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.lightTextSecondary,
+            ),
+            onPressed: () {
+              final nextMode = currentThemeMode == ThemeMode.dark
+                  ? ThemeMode.light
+                  : ThemeMode.dark;
+              ref.read(themeModeProvider.notifier).setThemeMode(nextMode);
+            },
+          ),
           // Quick Demo Trigger Button
           IconButton(
             tooltip: 'Demo Triggers',
-            icon: const Icon(Icons.bolt, color: AppTheme.amber),
+            icon: Icon(
+              Icons.bolt,
+              color: isDark ? AppColors.warningDark : AppColors.warningLight,
+            ),
             onPressed: () {
               showModalBottomSheet(
                 context: context,
@@ -94,7 +139,12 @@ class DashboardScreen extends ConsumerWidget {
           // Device Logs Button
           IconButton(
             tooltip: 'Device Logs',
-            icon: const Icon(Icons.receipt_long, color: Color(0xFF90A4AE)),
+            icon: Icon(
+              Icons.receipt_long,
+              color: isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.lightTextSecondary,
+            ),
             onPressed: () {
               showModalBottomSheet(
                 context: context,
@@ -110,203 +160,216 @@ class DashboardScreen extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 1. Connection Status Banner
-              ConnectionBanner(
-                deviceName: telemetry.deviceName,
-                connectionState: connectionState,
-                onReconnect: () => deviceService.reconnect(),
-                onDisconnect: () => deviceService.disconnect(),
-              ),
-              const SizedBox(height: 12),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 900;
 
-              // 2. Hand Visualization (Custom Kinematics)
-              HandVisualizer(
-                currentAngle: telemetry.positionDegrees,
-                minAngle: minAngle,
-                maxAngle: maxAngle,
-                handState: telemetry.handState,
-                height: 230,
-              ),
-              const SizedBox(height: 12),
+            if (isWide) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: SingleChildScrollView(
+                    padding: AppSpacing.edgeInsetsScreenWide,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left Pane: Hero Visualizer & Actuator Controls
+                        Expanded(
+                          flex: 5,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              HandVisualizer(
+                                currentAngle: telemetry.positionDegrees,
+                                minAngle: minAngle,
+                                maxAngle: maxAngle,
+                                handState: telemetry.handState,
+                                height: 320,
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              ModeSelector(
+                                currentMode: telemetry.operatingMode,
+                                isConnected: connectionState.isConnected,
+                                onModeChanged: (mode) =>
+                                    deviceService.setOperatingMode(mode),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              ControlPanel(
+                                handState: telemetry.handState,
+                                isConnected: connectionState.isConnected,
+                                isBatteryDepleted:
+                                    telemetry.batteryPercentage <= 0.0,
+                                onOpen: () => deviceService.openHand(),
+                                onClose: () => deviceService.closeHand(),
+                                onStop: () => deviceService.emergencyStop(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xl),
 
-              // 3. Battery & EMG Dual Readouts
-              Row(
+                        // Right Pane: Telemetry Readouts & EMG Graph
+                        Expanded(
+                          flex: 5,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              ConnectionBanner(
+                                deviceName: telemetry.deviceName,
+                                connectionState: connectionState,
+                                onReconnect: () => deviceService.reconnect(),
+                                onDisconnect: () => deviceService.disconnect(),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: BatteryIndicator(
+                                      batteryPercentage:
+                                          telemetry.batteryPercentage,
+                                      warningThreshold: batteryWarning,
+                                      isLowBattery: telemetry.isLowBattery,
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.md),
+                                  Expanded(
+                                    child: MetricTile(
+                                      label: 'EMG SENSOR',
+                                      value:
+                                          telemetry.emgValue.toStringAsFixed(0),
+                                      unit: 'μV',
+                                      icon: Icons.sensors,
+                                      accentColor:
+                                          telemetry.emgValue >= emgThreshold
+                                              ? AppColors.dangerDark
+                                              : (isDark
+                                                  ? AppColors.primaryDark
+                                                  : AppColors.primaryLight),
+                                      progress: (telemetry.emgValue / 250.0)
+                                          .clamp(0.0, 1.0),
+                                      progressColor:
+                                          telemetry.emgValue >= emgThreshold
+                                              ? AppColors.dangerDark
+                                              : null,
+                                      helperText:
+                                          telemetry.emgValue >= emgThreshold
+                                              ? 'ACTIVE'
+                                              : 'IDLE',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              EmgGraph(
+                                emgHistory: emgHistory,
+                                emgThreshold: emgThreshold,
+                                currentEmg: telemetry.emgValue,
+                                height: 200,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            // Single Column Layout for Mobile & Compact screens (< 900px)
+            return SingleChildScrollView(
+              padding: AppSpacing.edgeInsetsScreen,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: BatteryIndicator(
-                      batteryPercentage: telemetry.batteryPercentage,
-                      warningThreshold: batteryWarning,
-                      isLowBattery: telemetry.isLowBattery,
-                    ),
+                  // 1. Connection Status Banner
+                  ConnectionBanner(
+                    deviceName: telemetry.deviceName,
+                    connectionState: connectionState,
+                    onReconnect: () => deviceService.reconnect(),
+                    onDisconnect: () => deviceService.disconnect(),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _MiniEmgCard(
-                      emgValue: telemetry.emgValue,
-                      threshold: emgThreshold,
-                    ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // 2. Hand Visualization (Custom Kinematics)
+                  HandVisualizer(
+                    currentAngle: telemetry.positionDegrees,
+                    minAngle: minAngle,
+                    maxAngle: maxAngle,
+                    handState: telemetry.handState,
+                    height: 250,
                   ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // 3. Battery & EMG Dual Readouts
+                  Row(
+                    children: [
+                      Expanded(
+                        child: BatteryIndicator(
+                          batteryPercentage: telemetry.batteryPercentage,
+                          warningThreshold: batteryWarning,
+                          isLowBattery: telemetry.isLowBattery,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: MetricTile(
+                          label: 'EMG SENSOR',
+                          value: telemetry.emgValue.toStringAsFixed(0),
+                          unit: 'μV',
+                          icon: Icons.sensors,
+                          accentColor: telemetry.emgValue >= emgThreshold
+                              ? AppColors.dangerDark
+                              : (isDark
+                                  ? AppColors.primaryDark
+                                  : AppColors.primaryLight),
+                          progress:
+                              (telemetry.emgValue / 250.0).clamp(0.0, 1.0),
+                          progressColor: telemetry.emgValue >= emgThreshold
+                              ? AppColors.dangerDark
+                              : null,
+                          helperText: telemetry.emgValue >= emgThreshold
+                              ? 'ACTIVE'
+                              : 'IDLE',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // 4. Real-time EMG Signal Graph
+                  EmgGraph(
+                    emgHistory: emgHistory,
+                    emgThreshold: emgThreshold,
+                    currentEmg: telemetry.emgValue,
+                    height: 155,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // 5. Operating Mode Selector
+                  ModeSelector(
+                    currentMode: telemetry.operatingMode,
+                    isConnected: connectionState.isConnected,
+                    onModeChanged: (mode) =>
+                        deviceService.setOperatingMode(mode),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // 6. Actuator Controls (OPEN / CLOSE / STOP)
+                  ControlPanel(
+                    handState: telemetry.handState,
+                    isConnected: connectionState.isConnected,
+                    isBatteryDepleted: telemetry.batteryPercentage <= 0.0,
+                    onOpen: () => deviceService.openHand(),
+                    onClose: () => deviceService.closeHand(),
+                    onStop: () => deviceService.emergencyStop(),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
                 ],
               ),
-              const SizedBox(height: 12),
-
-              // 4. Real-time EMG Signal Graph
-              EmgGraph(
-                emgHistory: emgHistory,
-                emgThreshold: emgThreshold,
-                currentEmg: telemetry.emgValue,
-                height: 140,
-              ),
-              const SizedBox(height: 12),
-
-              // 5. Operating Mode Selector
-              ModeSelector(
-                currentMode: telemetry.operatingMode,
-                isConnected: connectionState.isConnected,
-                onModeChanged: (mode) => deviceService.setOperatingMode(mode),
-              ),
-              const SizedBox(height: 12),
-
-              // 6. Actuator Controls (OPEN / STOP / CLOSE)
-              ControlPanel(
-                handState: telemetry.handState,
-                isConnected: connectionState.isConnected,
-                isBatteryDepleted: telemetry.batteryPercentage <= 0.0,
-                onOpen: () => deviceService.openHand(),
-                onClose: () => deviceService.closeHand(),
-                onStop: () => deviceService.emergencyStop(),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
+            );
+          },
         ),
-      ),
-    );
-  }
-}
-
-class _MiniEmgCard extends StatelessWidget {
-  final double emgValue;
-  final double threshold;
-
-  const _MiniEmgCard({
-    required this.emgValue,
-    required this.threshold,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isOver = emgValue >= threshold;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isOver
-              ? AppTheme.crimson.withAlpha(153)
-              : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
-          width: isOver ? 1.5 : 1.0,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.sensors,
-                size: 15,
-                color: isOver ? AppTheme.crimson : AppTheme.cyan,
-              ),
-              const SizedBox(width: 4),
-              const Expanded(
-                child: Text(
-                  'EMG SENSOR',
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF90A4AE),
-                    letterSpacing: 0.6,
-                  ),
-                ),
-              ),
-              if (isOver)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: AppTheme.crimson.withAlpha(51),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'ACTIVE',
-                    style: TextStyle(
-                      fontSize: 8,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.crimson,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                emgValue.toStringAsFixed(0),
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: isOver
-                      ? AppTheme.crimson
-                      : (isDark ? AppTheme.cyan : const Color(0xFF0091EA)),
-                ),
-              ),
-              const SizedBox(width: 3),
-              const Text(
-                'μV',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF78909C),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                isOver ? 'SPIKE' : 'IDLE',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                  color: isOver ? AppTheme.crimson : AppTheme.mint,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: (emgValue / 250.0).clamp(0.0, 1.0),
-              minHeight: 5,
-              backgroundColor: isDark ? Colors.white10 : Colors.black12,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                isOver ? AppTheme.crimson : AppTheme.cyan,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

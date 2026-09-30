@@ -4,6 +4,10 @@ import '../../application/providers/calibration_provider.dart';
 import '../../application/providers/device_providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/models/calibration_state.dart';
+import '../widgets/common/app_card.dart';
+import '../widgets/common/metric_tile.dart';
+import '../widgets/common/primary_button.dart';
+import '../widgets/common/status_chip.dart';
 import '../widgets/hand_visualizer.dart';
 
 class CalibrationScreen extends ConsumerWidget {
@@ -19,22 +23,22 @@ class CalibrationScreen extends ConsumerWidget {
     final telemetry = telemetryAsync.value ?? deviceService.currentTelemetry;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final isCalibrating = calibState.currentStep != CalibrationStep.idle &&
+        calibState.currentStep != CalibrationStep.complete;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'CALIBRATION',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
+        title: const Text('CALIBRATION'),
         actions: [
-          if (calibState.currentStep != CalibrationStep.idle &&
-              calibState.currentStep != CalibrationStep.complete)
+          if (isCalibrating)
             TextButton.icon(
               onPressed: () => calibNotifier.cancelCalibration(),
-              icon: const Icon(Icons.cancel, color: AppTheme.crimson, size: 16),
+              icon: const Icon(Icons.cancel,
+                  color: AppColors.emergencyRed, size: 16),
               label: const Text(
                 'ABORT',
                 style: TextStyle(
-                  color: AppTheme.crimson,
+                  color: AppColors.emergencyRed,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
@@ -43,146 +47,283 @@ class CalibrationScreen extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 1. Live Hand Visualizer during Calibration
-              HandVisualizer(
-                currentAngle: telemetry.positionDegrees,
-                minAngle: calibState.measuredMinAngle ?? telemetry.minAngle,
-                maxAngle: calibState.measuredMaxAngle ?? telemetry.maxAngle,
-                handState: telemetry.handState,
-                height: 220,
-              ),
-              const SizedBox(height: 16),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 900;
 
-              // 2. Step Progress Stepper / Header
-              _buildProgressCard(context, calibState, isDark),
-              const SizedBox(height: 16),
-
-              // 3. Endpoint Measurement Cards
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildAngleCard(
-                      title: 'OPEN LIMIT (MIN)',
-                      angle: calibState.measuredMinAngle,
-                      isDark: isDark,
-                      accentColor: AppTheme.mint,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildAngleCard(
-                      title: 'CLOSED LIMIT (MAX)',
-                      angle: calibState.measuredMaxAngle,
-                      isDark: isDark,
-                      accentColor: AppTheme.cyan,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // 4. Error banner if any
-              if (calibState.errorMessage != null)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.crimson.withAlpha(40),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.crimson),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline,
-                          color: AppTheme.crimson, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          calibState.errorMessage!,
-                          style: const TextStyle(
-                            color: AppTheme.crimson,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+            if (isWide) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: SingleChildScrollView(
+                    padding: AppSpacing.edgeInsetsScreenWide,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left Column: Live Kinematics Preview
+                        Expanded(
+                          flex: 5,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              HandVisualizer(
+                                currentAngle: telemetry.positionDegrees,
+                                minAngle: calibState.measuredMinAngle ??
+                                    telemetry.minAngle,
+                                maxAngle: calibState.measuredMaxAngle ??
+                                    telemetry.maxAngle,
+                                handState: telemetry.handState,
+                                height: 320,
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: MetricTile(
+                                      label: 'OPEN LIMIT (MIN)',
+                                      value: calibState.measuredMinAngle != null
+                                          ? calibState.measuredMinAngle!
+                                              .toStringAsFixed(1)
+                                          : '--.-',
+                                      unit: '°',
+                                      icon: Icons.lock_open,
+                                      accentColor: isDark
+                                          ? AppColors.successDark
+                                          : AppColors.successLight,
+                                      badge: calibState.measuredMinAngle != null
+                                          ? StatusChip(
+                                              label: 'VERIFIED',
+                                              icon: Icons.check,
+                                              color: isDark
+                                                  ? AppColors.successDark
+                                                  : AppColors.successLight,
+                                            )
+                                          : null,
+                                      helperText: 'Target: 0.0°',
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.md),
+                                  Expanded(
+                                    child: MetricTile(
+                                      label: 'CLOSED LIMIT (MAX)',
+                                      value: calibState.measuredMaxAngle != null
+                                          ? calibState.measuredMaxAngle!
+                                              .toStringAsFixed(1)
+                                          : '--.-',
+                                      unit: '°',
+                                      icon: Icons.lock_outline,
+                                      accentColor: isDark
+                                          ? AppColors.primaryDark
+                                          : AppColors.primaryLight,
+                                      badge: calibState.measuredMaxAngle != null
+                                          ? StatusChip(
+                                              label: 'VERIFIED',
+                                              icon: Icons.check,
+                                              color: isDark
+                                                  ? AppColors.primaryDark
+                                                  : AppColors.primaryLight,
+                                            )
+                                          : null,
+                                      helperText: 'Target: 63.0°',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
+                        ),
+                        const SizedBox(width: AppSpacing.xl),
+
+                        // Right Column: Stepper & Controls
+                        Expanded(
+                          flex: 5,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildStepperCard(context, calibState, isDark),
+                              const SizedBox(height: AppSpacing.md),
+                              if (calibState.errorMessage != null) ...[
+                                _buildErrorBanner(calibState.errorMessage!),
+                                const SizedBox(height: AppSpacing.md),
+                              ],
+                              _buildActionControls(
+                                  context, calibState, calibNotifier, isDark),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            // Mobile Column Layout (< 900px)
+            return SingleChildScrollView(
+              padding: AppSpacing.edgeInsetsScreen,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 1. Live Hand Visualizer
+                  HandVisualizer(
+                    currentAngle: telemetry.positionDegrees,
+                    minAngle: calibState.measuredMinAngle ?? telemetry.minAngle,
+                    maxAngle: calibState.measuredMaxAngle ?? telemetry.maxAngle,
+                    handState: telemetry.handState,
+                    height: 230,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // 2. Clinical Stepper Progress Header
+                  _buildStepperCard(context, calibState, isDark),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // 3. Endpoint Measurement Tiles
+                  Row(
+                    children: [
+                      Expanded(
+                        child: MetricTile(
+                          label: 'OPEN LIMIT (MIN)',
+                          value: calibState.measuredMinAngle != null
+                              ? calibState.measuredMinAngle!.toStringAsFixed(1)
+                              : '--.-',
+                          unit: '°',
+                          icon: Icons.lock_open,
+                          accentColor: isDark
+                              ? AppColors.successDark
+                              : AppColors.successLight,
+                          badge: calibState.measuredMinAngle != null
+                              ? StatusChip(
+                                  label: 'VERIFIED',
+                                  icon: Icons.check,
+                                  color: isDark
+                                      ? AppColors.successDark
+                                      : AppColors.successLight,
+                                )
+                              : null,
+                          helperText: 'Target: 0.0°',
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: MetricTile(
+                          label: 'CLOSED LIMIT (MAX)',
+                          value: calibState.measuredMaxAngle != null
+                              ? calibState.measuredMaxAngle!.toStringAsFixed(1)
+                              : '--.-',
+                          unit: '°',
+                          icon: Icons.lock_outline,
+                          accentColor: isDark
+                              ? AppColors.primaryDark
+                              : AppColors.primaryLight,
+                          badge: calibState.measuredMaxAngle != null
+                              ? StatusChip(
+                                  label: 'VERIFIED',
+                                  icon: Icons.check,
+                                  color: isDark
+                                      ? AppColors.primaryDark
+                                      : AppColors.primaryLight,
+                                )
+                              : null,
+                          helperText: 'Target: 63.0°',
                         ),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: AppSpacing.md),
 
-              // 5. Context Action Button based on Step
-              _buildActionControls(context, calibState, calibNotifier),
-              const SizedBox(height: 24),
-            ],
-          ),
+                  // 4. Error Banner
+                  if (calibState.errorMessage != null) ...[
+                    _buildErrorBanner(calibState.errorMessage!),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+
+                  // 5. Context Action Controls
+                  _buildActionControls(
+                      context, calibState, calibNotifier, isDark),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildProgressCard(
-      BuildContext context, CalibrationState state, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
-        ),
-      ),
+  Widget _buildStepperCard(
+    BuildContext context,
+    CalibrationState state,
+    bool isDark,
+  ) {
+    final currentStepIdx = state.currentStep.stepIndex;
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Step Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(
                 child: Text(
-                  state.currentStep.stepTitle.toUpperCase(),
+                  'CALIBRATION WIZARD',
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.6,
-                    color: AppTheme.cyan,
+                  style: AppTypography.labelLarge(
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                'STEP ${state.currentStep.stepIndex} OF 3',
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF78909C),
-                ),
+              const SizedBox(width: AppSpacing.xs),
+              StatusChip(
+                label: 'STEP ${state.currentStep.stepIndex} OF 3',
+                icon: Icons.timeline,
+                color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: state.currentStep.stepIndex / 3.0,
-              minHeight: 6,
-              backgroundColor: isDark ? Colors.white10 : Colors.black12,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.cyan),
+          const SizedBox(height: AppSpacing.md),
+
+          // 3-Stage Progress Line with Numbered Nodes
+          Row(
+            children: [
+              Expanded(
+                  child:
+                      _buildStepNode(1, 'Open Limit', currentStepIdx, isDark)),
+              _buildStepConnector(1 < currentStepIdx, isDark),
+              Expanded(
+                  child: _buildStepNode(
+                      2, 'Closed Limit', currentStepIdx, isDark)),
+              _buildStepConnector(2 < currentStepIdx, isDark),
+              Expanded(
+                  child: _buildStepNode(3, 'Save', currentStepIdx, isDark)),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Divider(
+            height: 1,
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Instruction Text
+          Text(
+            state.currentStep.stepTitle.toUpperCase(),
+            style: AppTypography.labelLarge(
+              color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 2),
           Text(
             state.currentStep.instructions,
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? Colors.white70 : Colors.black87,
-              height: 1.3,
+            style: AppTypography.bodySmall(
+              color: isDark
+                  ? AppColors.darkTextPrimary
+                  : AppColors.lightTextPrimary,
             ),
           ),
         ],
@@ -190,45 +331,110 @@ class CalibrationScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildAngleCard({
-    required String title,
-    required double? angle,
-    required bool isDark,
-    required Color accentColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: angle != null
-              ? accentColor.withAlpha(120)
-              : (isDark ? AppTheme.darkBorder : AppTheme.lightBorder),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF78909C),
-              letterSpacing: 0.5,
+  Widget _buildStepNode(
+    int step,
+    String title,
+    int currentStep,
+    bool isDark,
+  ) {
+    final isDone = step < currentStep;
+    final isCurrent = step == currentStep;
+    final primaryColor =
+        isDark ? AppColors.primaryDark : AppColors.primaryLight;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isDone
+                ? (isDark ? AppColors.successDark : AppColors.successLight)
+                : (isCurrent
+                    ? primaryColor
+                    : (isDark
+                        ? AppColors.darkSurfaceElevated
+                        : AppColors.lightSurfaceElevated)),
+            border: Border.all(
+              color: isDone
+                  ? (isDark ? AppColors.successDark : AppColors.successLight)
+                  : (isCurrent
+                      ? primaryColor
+                      : (isDark
+                          ? AppColors.darkBorder
+                          : AppColors.lightBorder)),
+              width: 1.5,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            angle != null ? '${angle.toStringAsFixed(1)}°' : '--.-°',
-            style: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: angle != null
-                  ? accentColor
-                  : (isDark ? Colors.white24 : Colors.black26),
+          child: Center(
+            child: isDone
+                ? const Icon(Icons.check, size: 14, color: Colors.white)
+                : Text(
+                    '$step',
+                    style: TextStyle(
+                      fontFamily: AppTypography.monoFontFamily,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: isCurrent
+                          ? (isDark ? Colors.black : Colors.white)
+                          : (isDark
+                              ? AppColors.darkTextMuted
+                              : AppColors.lightTextMuted),
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          title,
+          style: AppTypography.labelSmall(
+            color: isCurrent
+                ? (isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.lightTextPrimary)
+                : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+          ),
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepConnector(bool isDone, bool isDark) {
+    return Container(
+      width: 16,
+      height: 2,
+      margin: const EdgeInsets.only(bottom: 14),
+      color: isDone
+          ? (isDark ? AppColors.successDark : AppColors.successLight)
+          : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+    );
+  }
+
+  Widget _buildErrorBanner(String message) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.emergencyRed.withAlpha(40),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.emergencyRed),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline,
+              color: AppColors.emergencyRed, size: 20),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: AppColors.emergencyRed,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -240,18 +446,27 @@ class CalibrationScreen extends ConsumerWidget {
     BuildContext context,
     CalibrationState state,
     CalibrationNotifier notifier,
+    bool isDark,
   ) {
     if (state.isBusy) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 12),
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 'Actuating prosthetic servo & measuring endpoint...',
-                style: TextStyle(fontSize: 12, color: Color(0xFF90A4AE)),
+                style: AppTypography.bodySmall(
+                  color: isDark
+                      ? AppColors.darkTextMuted
+                      : AppColors.lightTextMuted,
+                ),
               ),
             ],
           ),
@@ -261,72 +476,72 @@ class CalibrationScreen extends ConsumerWidget {
 
     switch (state.currentStep) {
       case CalibrationStep.idle:
-        return ElevatedButton.icon(
+        return PrimaryButton(
+          label: 'START CALIBRATION SEQUENCE',
+          icon: Icons.play_arrow,
+          height: 52,
           onPressed: () => notifier.startCalibration(),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.cyan,
-            foregroundColor: Colors.black,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          icon: const Icon(Icons.play_arrow),
-          label: const Text('START CALIBRATION SEQUENCE'),
         );
 
       case CalibrationStep.step1OpenPosition:
-        return ElevatedButton.icon(
+        return PrimaryButton(
+          label: 'DRIVE & RECORD OPEN POSITION (0°)',
+          icon: Icons.check_circle_outline,
+          height: 52,
+          backgroundColor:
+              isDark ? AppColors.successDark : AppColors.successLight,
+          foregroundColor: Colors.white,
           onPressed: () => notifier.captureOpenPosition(),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.mint,
-            foregroundColor: Colors.black,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          icon: const Icon(Icons.check_circle_outline),
-          label: const Text('DRIVE & RECORD OPEN POSITION (0°)'),
         );
 
       case CalibrationStep.step2ClosedPosition:
-        return ElevatedButton.icon(
+        return PrimaryButton(
+          label: 'DRIVE & RECORD CLOSED POSITION (63°)',
+          icon: Icons.check_circle_outline,
+          height: 52,
           onPressed: () => notifier.captureClosePosition(),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.cyan,
-            foregroundColor: Colors.black,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          icon: const Icon(Icons.check_circle_outline),
-          label: const Text('DRIVE & RECORD CLOSED POSITION (63°)'),
         );
 
       case CalibrationStep.step3Saving:
-        return ElevatedButton.icon(
+        return PrimaryButton(
+          label: 'SAVE & APPLY CALIBRATED LIMITS',
+          icon: Icons.save,
+          height: 52,
+          backgroundColor: isDark ? AppColors.blueDark : AppColors.blueLight,
+          foregroundColor: Colors.white,
           onPressed: state.canSave ? () => notifier.saveCalibration() : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.blue,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          icon: const Icon(Icons.save),
-          label: const Text('SAVE & APPLY CALIBRATED LIMITS'),
         );
 
       case CalibrationStep.complete:
         return Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
-                color: AppTheme.mint.withAlpha(40),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.mint),
+                color: (isDark ? AppColors.successDark : AppColors.successLight)
+                    .withAlpha(40),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(
+                  color:
+                      isDark ? AppColors.successDark : AppColors.successLight,
+                ),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.verified, color: AppTheme.mint, size: 24),
-                  SizedBox(width: 12),
+                  Icon(
+                    Icons.verified,
+                    color:
+                        isDark ? AppColors.successDark : AppColors.successLight,
+                    size: 28,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Text(
                       'Calibration complete! Physical endpoints verified and synchronized.',
                       style: TextStyle(
-                        color: AppTheme.mint,
+                        color: isDark
+                            ? AppColors.successDark
+                            : AppColors.successLight,
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
                       ),
@@ -335,29 +550,24 @@ class CalibrationScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            ElevatedButton(
+            const SizedBox(height: AppSpacing.md),
+            PrimaryButton(
+              label: 'RE-CALIBRATE AGAIN',
+              icon: Icons.refresh,
+              height: 48,
               onPressed: () => notifier.reset(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.cyan,
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              child: const Text('RE-CALIBRATE AGAIN'),
             ),
           ],
         );
 
       case CalibrationStep.failed:
-        return ElevatedButton.icon(
+        return PrimaryButton(
+          label: 'RETRY CALIBRATION',
+          icon: Icons.refresh,
+          height: 52,
+          backgroundColor: AppColors.emergencyRed,
+          foregroundColor: Colors.white,
           onPressed: () => notifier.startCalibration(),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.crimson,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          icon: const Icon(Icons.refresh),
-          label: const Text('RETRY CALIBRATION'),
         );
     }
   }
