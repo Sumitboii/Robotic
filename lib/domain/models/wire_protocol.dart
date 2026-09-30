@@ -3,11 +3,12 @@ import 'device_telemetry.dart';
 import 'hand_state.dart';
 import 'operating_mode.dart';
 
-/// Canonical wire protocol codec for Synthera Prosthetic Hand communication (Spec §2).
+/// Canonical wire protocol codec for Synthera Prosthetic Hand communication (Assignment §4).
 ///
-/// Format: Line-oriented KEY:VALUE plain text.
+/// Single-line format:
+/// `BATTERY:82 POSITION:45 EMG:127 MODE:AUTO STATE:HOLDING`
 ///
-/// Telemetry Example:
+/// Multi-line format (also accepted):
 /// ```text
 /// BATTERY:82
 /// POSITION:45
@@ -84,27 +85,29 @@ class WireProtocol {
     }
   }
 
-  /// Encodes [DeviceTelemetry] into the canonical line-oriented `KEY:VALUE` wire string (Spec §2).
+  /// Encodes [DeviceTelemetry] into the canonical single-line `KEY:VALUE` wire string (Assignment §4).
+  /// Example: `BATTERY:82 POSITION:45 EMG:127 MODE:AUTO STATE:HOLDING`
   static String encodeTelemetry(DeviceTelemetry telemetry) {
-    final buffer = StringBuffer();
-    buffer.writeln('BATTERY:${_formatNumber(telemetry.batteryPercentage)}');
-    buffer.writeln('POSITION:${_formatNumber(telemetry.positionDegrees)}');
-    buffer.writeln('EMG:${_formatNumber(telemetry.emgValue)}');
-    buffer.writeln('MODE:${telemetry.operatingMode.displayName}');
-    buffer.write('STATE:${telemetry.handState.displayName}');
-    return buffer.toString();
+    final emgStr = telemetry.isEmgSensorAvailable
+        ? _formatNumber(telemetry.emgValue)
+        : 'ERR';
+    return 'BATTERY:${_formatNumber(telemetry.batteryPercentage)} '
+        'POSITION:${_formatNumber(telemetry.positionDegrees)} '
+        'EMG:$emgStr '
+        'MODE:${telemetry.operatingMode.displayName} '
+        'STATE:${telemetry.handState.displayName}';
   }
 
   /// Safely decodes a raw wire string into [DeviceTelemetry].
   ///
   /// Tolerant parsing handles:
-  /// - Spec-compliant newline-separated (`\n`, `\r\n`) and space/semicolon-separated `KEY:VALUE` pairs.
+  /// - Single-line `KEY:VALUE` frame: `BATTERY:82 POSITION:45 EMG:127 MODE:AUTO STATE:HOLDING`
+  /// - Multi-line newline-separated (`\n`, `\r\n`) pairs.
+  /// - Space-separated, comma-separated, or semicolon-separated tokens.
+  /// - Missing or non-numeric/fault EMG values (`EMG:ERR`, `EMG:FAULT`, `EMG:NAN` -> sets `isEmgSensorAvailable = false`).
   /// - Unknown/extra keys (gracefully ignored).
-  /// - Missing keys (substituted with sensible defaults).
-  /// - Non-numeric or invalid values (reverts to safe defaults, never throws).
   /// - Out-of-range values (clamped to physical limits).
-  /// - Empty lines and extra leading/trailing whitespace.
-  /// - Legacy CSV format as a secondary fallback.
+  /// - Legacy CSV format as secondary fallback.
   ///
   /// Never throws an exception.
   static DeviceTelemetry? decodeTelemetry(
@@ -151,12 +154,30 @@ class WireProtocol {
           }
         }
 
+        bool emgSensorAvailable = true;
         double emg = 127.0;
         if (map.containsKey('EMG')) {
-          final parsed = double.tryParse(map['EMG']!);
-          if (parsed != null) {
-            emg = parsed;
+          final rawEmg = map['EMG']!;
+          final upper = rawEmg.toUpperCase();
+          if (upper == 'ERR' ||
+              upper == 'FAULT' ||
+              upper == 'NAN' ||
+              upper == 'INVALID') {
+            emgSensorAvailable = false;
+            emg = 0.0;
+          } else {
+            final parsed = double.tryParse(rawEmg);
+            if (parsed != null) {
+              emg = parsed;
+            } else {
+              emgSensorAvailable = false;
+              emg = 0.0;
+            }
           }
+        } else {
+          // If EMG key is completely absent from the frame, mark as unavailable
+          emgSensorAvailable = false;
+          emg = 0.0;
         }
 
         OperatingMode mode = OperatingMode.auto;
@@ -174,11 +195,13 @@ class WireProtocol {
           batteryPercentage: battery.clamp(0.0, 100.0),
           positionDegrees: position.clamp(minAngle, maxAngle),
           emgValue: emg.clamp(0.0, 255.0),
+          isEmgSensorAvailable: emgSensorAvailable,
           operatingMode: mode,
           handState: state,
           minAngle: minAngle,
           maxAngle: maxAngle,
           isLowBattery: battery <= 20.0,
+          rawFrame: trimmed,
           timestamp: DateTime.now(),
         );
       }
@@ -198,11 +221,13 @@ class WireProtocol {
             batteryPercentage: battery.clamp(0.0, 100.0),
             positionDegrees: posAngle.clamp(minAngle, maxAngle),
             emgValue: emg.clamp(0.0, 255.0),
+            isEmgSensorAvailable: true,
             operatingMode: mode,
             handState: state,
             minAngle: minAngle,
             maxAngle: maxAngle,
             isLowBattery: battery <= 20.0,
+            rawFrame: trimmed,
             timestamp: DateTime.now(),
           );
         }

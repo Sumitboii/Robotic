@@ -28,15 +28,15 @@ enum CalibrationStep {
       case CalibrationStep.idle:
         return 'Press "Start Calibration" to begin mechanical limit calibration.';
       case CalibrationStep.step1OpenPosition:
-        return 'Drive hand fully OPEN and confirm the zero reference point.';
+        return 'Command hand to OPEN position. Once position settles, capture the zero reference angle.';
       case CalibrationStep.step2ClosedPosition:
-        return 'Drive hand fully CLOSED to establish the maximum range of motion.';
+        return 'Command hand to CLOSED position. Once settled, capture the maximum stroke angle.';
       case CalibrationStep.step3Saving:
-        return 'Validating measured range and persisting hardware configuration...';
+        return 'Validating physical range and saving mechanical limits to persistent storage.';
       case CalibrationStep.complete:
-        return 'Mechanical limits updated successfully and synced to simulated device.';
+        return 'Mechanical limits verified and saved successfully.';
       case CalibrationStep.failed:
-        return 'Calibration aborted or invalid range detected. Please retry.';
+        return 'Calibration aborted or invalid mechanical range detected. Please retry.';
     }
   }
 

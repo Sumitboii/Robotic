@@ -26,6 +26,8 @@ class CalibrationScreen extends ConsumerWidget {
     final isCalibrating = calibState.currentStep != CalibrationStep.idle &&
         calibState.currentStep != CalibrationStep.complete;
 
+    final isHandMoving = telemetry.handState.isMoving;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('CALIBRATION'),
@@ -92,7 +94,7 @@ class CalibrationScreen extends ConsumerWidget {
                                           : AppColors.successLight,
                                       badge: calibState.measuredMinAngle != null
                                           ? StatusChip(
-                                              label: 'VERIFIED',
+                                              label: 'CAPTURED',
                                               icon: Icons.check,
                                               color: isDark
                                                   ? AppColors.successDark
@@ -117,7 +119,7 @@ class CalibrationScreen extends ConsumerWidget {
                                           : AppColors.primaryLight,
                                       badge: calibState.measuredMaxAngle != null
                                           ? StatusChip(
-                                              label: 'VERIFIED',
+                                              label: 'CAPTURED',
                                               icon: Icons.check,
                                               color: isDark
                                                   ? AppColors.primaryDark
@@ -147,7 +149,13 @@ class CalibrationScreen extends ConsumerWidget {
                                 const SizedBox(height: AppSpacing.md),
                               ],
                               _buildActionControls(
-                                  context, calibState, calibNotifier, isDark),
+                                context,
+                                calibState,
+                                calibNotifier,
+                                isDark,
+                                isHandMoving,
+                                telemetry.positionDegrees,
+                              ),
                             ],
                           ),
                         ),
@@ -194,7 +202,7 @@ class CalibrationScreen extends ConsumerWidget {
                               : AppColors.successLight,
                           badge: calibState.measuredMinAngle != null
                               ? StatusChip(
-                                  label: 'VERIFIED',
+                                  label: 'CAPTURED',
                                   icon: Icons.check,
                                   color: isDark
                                       ? AppColors.successDark
@@ -218,7 +226,7 @@ class CalibrationScreen extends ConsumerWidget {
                               : AppColors.primaryLight,
                           badge: calibState.measuredMaxAngle != null
                               ? StatusChip(
-                                  label: 'VERIFIED',
+                                  label: 'CAPTURED',
                                   icon: Icons.check,
                                   color: isDark
                                       ? AppColors.primaryDark
@@ -240,7 +248,13 @@ class CalibrationScreen extends ConsumerWidget {
 
                   // 5. Context Action Controls
                   _buildActionControls(
-                      context, calibState, calibNotifier, isDark),
+                    context,
+                    calibState,
+                    calibNotifier,
+                    isDark,
+                    isHandMoving,
+                    telemetry.positionDegrees,
+                  ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
               ),
@@ -447,6 +461,8 @@ class CalibrationScreen extends ConsumerWidget {
     CalibrationState state,
     CalibrationNotifier notifier,
     bool isDark,
+    bool isHandMoving,
+    double currentPosition,
   ) {
     if (state.isBusy) {
       return Center(
@@ -461,7 +477,7 @@ class CalibrationScreen extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                'Actuating prosthetic servo & measuring endpoint...',
+                'Communicating with prosthetic hardware...',
                 style: AppTypography.bodySmall(
                   color: isDark
                       ? AppColors.darkTextMuted
@@ -484,35 +500,139 @@ class CalibrationScreen extends ConsumerWidget {
         );
 
       case CalibrationStep.step1OpenPosition:
-        return PrimaryButton(
-          label: 'DRIVE & RECORD OPEN POSITION (0°)',
-          icon: Icons.check_circle_outline,
-          height: 52,
-          backgroundColor:
-              isDark ? AppColors.successDark : AppColors.successLight,
-          foregroundColor: Colors.white,
-          onPressed: () => notifier.captureOpenPosition(),
+        return Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => notifier.moveToOpen(),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                    ),
+                    icon: const Icon(Icons.arrow_back, size: 18),
+                    label: const Text('Move to OPEN'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: PrimaryButton(
+                    label: isHandMoving
+                        ? 'Moving (${currentPosition.toStringAsFixed(0)}°)...'
+                        : 'Capture OPEN (${currentPosition.toStringAsFixed(1)}°)',
+                    icon: Icons.check_circle_outline,
+                    height: 48,
+                    backgroundColor:
+                        isDark ? AppColors.successDark : AppColors.successLight,
+                    foregroundColor: Colors.white,
+                    onPressed: isHandMoving
+                        ? null
+                        : () => notifier.captureOpenPosition(currentPosition),
+                  ),
+                ),
+              ],
+            ),
+          ],
         );
 
       case CalibrationStep.step2ClosedPosition:
-        return PrimaryButton(
-          label: 'DRIVE & RECORD CLOSED POSITION (63°)',
-          icon: Icons.check_circle_outline,
-          height: 52,
-          onPressed: () => notifier.captureClosePosition(),
+        return Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => notifier.moveToClosed(),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                    ),
+                    icon: const Icon(Icons.arrow_forward, size: 18),
+                    label: const Text('Move to CLOSED'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: PrimaryButton(
+                    label: isHandMoving
+                        ? 'Moving (${currentPosition.toStringAsFixed(0)}°)...'
+                        : 'Capture CLOSED (${currentPosition.toStringAsFixed(1)}°)',
+                    icon: Icons.check_circle_outline,
+                    height: 48,
+                    backgroundColor:
+                        isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                    foregroundColor: Colors.white,
+                    onPressed: isHandMoving
+                        ? null
+                        : () => notifier.captureClosePosition(currentPosition),
+                  ),
+                ),
+              ],
+            ),
+          ],
         );
 
       case CalibrationStep.step3Saving:
-        return PrimaryButton(
-          label: 'SAVE & APPLY CALIBRATED LIMITS',
-          icon: Icons.save,
-          height: 52,
-          backgroundColor: isDark ? AppColors.blueDark : AppColors.blueLight,
-          foregroundColor: Colors.white,
-          onPressed: state.canSave ? () => notifier.saveCalibration() : null,
+        final minAngle = state.measuredMinAngle ?? 0.0;
+        final maxAngle = state.measuredMaxAngle ?? 63.0;
+        final range = maxAngle - minAngle;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: (isDark ? AppColors.blueDark : AppColors.blueLight)
+                    .withAlpha(30),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: isDark ? AppColors.blueDark : AppColors.blueLight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'CALIBRATION SUMMARY',
+                    style: AppTypography.labelMedium(
+                      color: isDark ? AppColors.blueDark : AppColors.blueLight,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Open Limit: ${minAngle.toStringAsFixed(1)}°  |  Closed Limit: ${maxAngle.toStringAsFixed(1)}°  |  Total Range: ${range.toStringAsFixed(1)}°',
+                    style: AppTypography.bodySmall(
+                      color: isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            PrimaryButton(
+              label: 'SAVE & APPLY CALIBRATED LIMITS',
+              icon: Icons.save,
+              height: 52,
+              backgroundColor:
+                  isDark ? AppColors.blueDark : AppColors.blueLight,
+              foregroundColor: Colors.white,
+              onPressed:
+                  state.canSave ? () => notifier.saveCalibration() : null,
+            ),
+          ],
         );
 
       case CalibrationStep.complete:
+        final minAngle = state.measuredMinAngle ?? 0.0;
+        final maxAngle = state.measuredMaxAngle ?? 63.0;
         return Column(
           children: [
             Container(
@@ -537,7 +657,7 @@ class CalibrationScreen extends ConsumerWidget {
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Text(
-                      'Calibration complete! Physical endpoints verified and synchronized.',
+                      'Calibration Complete! Measured limits (${minAngle.toStringAsFixed(1)}° to ${maxAngle.toStringAsFixed(1)}°) applied and persisted.',
                       style: TextStyle(
                         color: isDark
                             ? AppColors.successDark

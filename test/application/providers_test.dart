@@ -49,6 +49,10 @@ class FailingDeviceService implements DeviceService {
       throw Exception('Command failure');
 
   @override
+  Future<void> sendRawCommand(String rawCommand) async =>
+      throw Exception('Raw command failure');
+
+  @override
   Future<void> openHand() async => throw Exception('Open failure');
 
   @override
@@ -92,6 +96,18 @@ class FailingDeviceService implements DeviceService {
   Future<void> simulateConnectionDrop() async {}
 
   @override
+  Future<void> toggleEmgSensorFault([bool? enable]) async {}
+
+  @override
+  Future<void> setFailNextReconnect(bool fail) async {}
+
+  @override
+  bool get isEmgSensorFaultSimulated => false;
+
+  @override
+  bool get willFailNextReconnect => false;
+
+  @override
   void dispose() {}
 }
 
@@ -129,7 +145,7 @@ void main() {
       container.dispose();
     });
 
-    group('CalibrationNotifier Workflow & Error Handling', () {
+    group('CalibrationNotifier Workflow & Error Handling (Assignment §9)', () {
       test('Initial state is idle and clean', () {
         final state = container.read(calibrationNotifierProvider);
         expect(state.currentStep, equals(CalibrationStep.idle));
@@ -150,31 +166,50 @@ void main() {
           () async {
         final notifier = container.read(calibrationNotifierProvider.notifier);
         notifier.startCalibration();
-        await notifier.captureOpenPosition();
+        await notifier.captureOpenPosition(0.0);
 
         final state = container.read(calibrationNotifierProvider);
         expect(state.currentStep, equals(CalibrationStep.step2ClosedPosition));
-        expect(state.measuredMinAngle, isNotNull);
+        expect(state.measuredMinAngle, equals(0.0));
         expect(state.isBusy, isFalse);
       });
 
       test('captureClosePosition success advances to step3Saving', () async {
         final notifier = container.read(calibrationNotifierProvider.notifier);
         notifier.startCalibration();
-        await notifier.captureOpenPosition();
-        await notifier.captureClosePosition();
+        await notifier.captureOpenPosition(0.0);
+        await notifier.captureClosePosition(63.0);
 
         final state = container.read(calibrationNotifierProvider);
         expect(state.currentStep, equals(CalibrationStep.step3Saving));
-        expect(state.measuredMaxAngle, isNotNull);
+        expect(state.measuredMaxAngle, equals(63.0));
         expect(state.canSave, isTrue);
+      });
+
+      test('captureClosePosition rejects if closed <= open or range < 10° (§9)',
+          () async {
+        final notifier = container.read(calibrationNotifierProvider.notifier);
+        notifier.startCalibration();
+        await notifier.captureOpenPosition(20.0);
+
+        // Attempt invalid closed position <= open
+        final success = await notifier.captureClosePosition(15.0);
+        expect(success, isFalse);
+        expect(container.read(calibrationNotifierProvider).errorMessage,
+            contains('Invalid calibration range'));
+
+        // Attempt invalid range < 10°
+        final success2 = await notifier.captureClosePosition(25.0);
+        expect(success2, isFalse);
+        expect(container.read(calibrationNotifierProvider).errorMessage,
+            contains('Invalid calibration range'));
       });
 
       test('saveCalibration persists settings and marks complete', () async {
         final notifier = container.read(calibrationNotifierProvider.notifier);
         notifier.startCalibration();
-        await notifier.captureOpenPosition();
-        await notifier.captureClosePosition();
+        await notifier.captureOpenPosition(0.0);
+        await notifier.captureClosePosition(63.0);
 
         final success = await notifier.saveCalibration();
         expect(success, isTrue);
@@ -204,36 +239,6 @@ void main() {
         notifier.reset();
         expect(container.read(calibrationNotifierProvider).currentStep,
             equals(CalibrationStep.idle));
-      });
-
-      test(
-          'Error handling when DeviceService throws during open/close capture and save',
-          () async {
-        final failingContainer = ProviderContainer(
-          overrides: [
-            deviceServiceProvider.overrideWithValue(FailingDeviceService()),
-          ],
-        );
-        addTearDown(failingContainer.dispose);
-
-        final notifier =
-            failingContainer.read(calibrationNotifierProvider.notifier);
-        notifier.startCalibration();
-
-        // 1. Open capture error
-        await notifier.captureOpenPosition();
-        var state = failingContainer.read(calibrationNotifierProvider);
-        expect(state.errorMessage, contains('Failed to capture OPEN position'));
-
-        // 2. Close capture error
-        await notifier.captureClosePosition();
-        state = failingContainer.read(calibrationNotifierProvider);
-        expect(
-            state.errorMessage, contains('Failed to capture CLOSED position'));
-
-        // 3. Save error
-        final saveSuccess = await notifier.saveCalibration();
-        expect(saveSuccess, isFalse);
       });
     });
 

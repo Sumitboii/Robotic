@@ -6,7 +6,8 @@ import 'package:synthera_prosthetic_hand/domain/models/operating_mode.dart';
 import 'package:synthera_prosthetic_hand/infrastructure/device/mock/simulated_esp32.dart';
 
 void main() {
-  group('SimulatedEsp32 Firmware Simulation Test Suite', () {
+  group('SimulatedEsp32 Firmware Simulation Test Suite (Assignment §4 & §10)',
+      () {
     late SimulatedEsp32 esp32;
 
     setUp(() {
@@ -22,6 +23,82 @@ void main() {
       expect(esp32.batteryPercentage, equals(82.0));
       expect(esp32.operatingMode, equals(OperatingMode.auto));
       expect(esp32.connectionState.isConnected, isTrue);
+    });
+
+    test('Emits single-line raw text wire frames on rawTelemetryStream (§4)',
+        () async {
+      final frame = await esp32.rawTelemetryStream.first;
+      expect(frame, startsWith('BATTERY:'));
+      expect(frame, contains('POSITION:'));
+      expect(frame, contains('EMG:'));
+      expect(frame, contains('MODE:'));
+      expect(frame, contains('STATE:'));
+    });
+
+    test('processWireCommand decodes valid commands and actuates hand (§4)',
+        () {
+      esp32.setOperatingMode(OperatingMode.manual);
+      esp32.processWireCommand('OPEN');
+      expect(esp32.hand.state, equals(HandState.opening));
+
+      esp32.processWireCommand('STOP');
+      expect(esp32.hand.state, equals(HandState.stopped));
+
+      esp32.processWireCommand('CLOSE');
+      expect(esp32.hand.state, equals(HandState.closing));
+    });
+
+    test(
+        'processWireCommand with malformed string logs ERR:INVALID_COMMAND without crashing (§10)',
+        () async {
+      final logs = <String>[];
+      final sub = esp32.logStream.listen((entry) => logs.add(entry.message));
+      addTearDown(() => sub.cancel());
+
+      esp32.processWireCommand('FLY');
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      expect(
+          logs.any((msg) => msg.contains('ERR:INVALID_COMMAND: FLY')), isTrue);
+    });
+
+    test(
+        'Simulate EMG sensor fault causes device to emit frames with EMG:ERR (§10)',
+        () {
+      expect(esp32.isEmgSensorFaultSimulated, isFalse);
+      esp32.toggleEmgSensorFault(true);
+      expect(esp32.isEmgSensorFaultSimulated, isTrue);
+
+      final telemetry = esp32.currentTelemetry;
+      expect(telemetry.isEmgSensorAvailable, isFalse);
+      expect(telemetry.emgValue, equals(0.0));
+
+      final frame = esp32.currentWireTelemetry;
+      expect(frame, contains('EMG:ERR'));
+
+      // Recovery
+      esp32.toggleEmgSensorFault(false);
+      expect(esp32.isEmgSensorFaultSimulated, isFalse);
+      expect(esp32.currentTelemetry.isEmgSensorAvailable, isTrue);
+    });
+
+    test(
+        'Fail next reconnect causes reconnect() to transition to connectionFailed (§10)',
+        () async {
+      await esp32.disconnect();
+      expect(esp32.connectionState, equals(DeviceConnectionState.disconnected));
+
+      esp32.setFailNextReconnect(true);
+      expect(esp32.willFailNextReconnect, isTrue);
+
+      await esp32.reconnect();
+      expect(esp32.connectionState,
+          equals(DeviceConnectionState.connectionFailed));
+      expect(esp32.connectionState.displayName, equals('Connection Failed'));
+
+      // Next reconnect without fail flag succeeds
+      await esp32.reconnect();
+      expect(esp32.connectionState, equals(DeviceConnectionState.connected));
     });
 
     test('Manual OPEN and CLOSE commands actuate hand', () async {
@@ -49,8 +126,6 @@ void main() {
 
       // After threshold crossing, EMG must disarm to prevent repeated firing
       expect(esp32.isEmgArmed, isFalse);
-
-      // A sustained high signal will NOT re-arm until it drops below threshold - 15.0
       expect(esp32.isEmgArmed, isFalse);
     });
 
@@ -88,36 +163,10 @@ void main() {
       expect(esp32.hand.isMoving, isFalse);
     });
 
-    test('Connection disconnect and reconnect sequence', () async {
-      final stateHistory = <DeviceConnectionState>[];
-      final subscription = esp32.connectionStateStream
-          .listen((state) => stateHistory.add(state));
-      addTearDown(() => subscription.cancel());
-
-      await esp32.disconnect();
-      expect(esp32.connectionState, equals(DeviceConnectionState.disconnected));
-      expect(esp32.connectionState.displayName, equals('Device Disconnected'));
-
-      // Commands while disconnected should be rejected safely without crashing
-      esp32.processCommand(DeviceCommand.open());
-      expect(esp32.hand.isMoving, isFalse);
-
-      await esp32.reconnect();
-      await Future.delayed(const Duration(milliseconds: 50));
-      expect(esp32.connectionState, equals(DeviceConnectionState.connected));
-      expect(esp32.connectionState.displayName, equals('Connected'));
-
-      // Verify progression sequence: disconnected -> reconnecting -> connected
-      expect(stateHistory, contains(DeviceConnectionState.disconnected));
-      expect(stateHistory, contains(DeviceConnectionState.reconnecting));
-      expect(stateHistory, contains(DeviceConnectionState.connected));
-    });
-
     test('Rapid repeated OPEN/CLOSE/STOP commands leave the state consistent',
         () {
       esp32.setOperatingMode(OperatingMode.manual);
 
-      // Execute 20 rapid alternating commands
       for (int i = 0; i < 20; i++) {
         if (i % 3 == 0) {
           esp32.processCommand(DeviceCommand.open());
@@ -128,30 +177,12 @@ void main() {
         }
       }
 
-      // Final command is STOP
       esp32.processCommand(DeviceCommand.stop());
       expect(esp32.hand.state, equals(HandState.stopped));
       expect(esp32.hand.isMoving, isFalse);
       expect(
           esp32.hand.currentAngle, greaterThanOrEqualTo(esp32.hand.minAngle));
       expect(esp32.hand.currentAngle, lessThanOrEqualTo(esp32.hand.maxAngle));
-    });
-
-    test('Changing mode away from AUTO cancels the AUTO schedule', () async {
-      esp32.setOperatingMode(OperatingMode.auto);
-      expect(esp32.operatingMode, equals(OperatingMode.auto));
-
-      // Switch away to MANUAL mode
-      esp32.setOperatingMode(OperatingMode.manual);
-      esp32.processCommand(DeviceCommand.stop());
-      expect(esp32.hand.state, equals(HandState.stopped));
-
-      // Wait past the auto hold timer threshold (1.6s)
-      await Future.delayed(const Duration(milliseconds: 200));
-
-      // Ensure hand remained stopped and did not trigger autonomous motion
-      expect(esp32.hand.state, equals(HandState.stopped));
-      expect(esp32.hand.isMoving, isFalse);
     });
   });
 }

@@ -5,7 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:synthera_prosthetic_hand/app.dart';
 
 void main() {
-  group('Settings & Calibration Integration Flow Widget Test Suite', () {
+  group(
+      'Settings & Calibration Integration Flow Widget Test Suite (Assignment §8 & §9)',
+      () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
     });
@@ -86,7 +88,7 @@ void main() {
     });
 
     testWidgets(
-        'Calibration Wizard: Complete 3-step sequence, verify limits, and block premature save',
+        'Calibration Wizard: Complete 3-step sequence with real position measurement (§9)',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 1920);
       tester.view.devicePixelRatio = 1.0;
@@ -104,32 +106,75 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('CALIBRATION'), findsOneWidget);
 
-      // Step 1: Start Calibration Sequence
+      // Step 0: Start Calibration Sequence
       expect(find.text('START CALIBRATION SEQUENCE'), findsOneWidget);
       await tester.tap(find.text('START CALIBRATION SEQUENCE'));
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Step 2: Record OPEN endpoint
-      expect(find.text('DRIVE & RECORD OPEN POSITION (0°)'), findsOneWidget);
-      await tester.tap(find.text('DRIVE & RECORD OPEN POSITION (0°)'));
-      await tester.pump(const Duration(milliseconds: 1500));
+      // Step 1: Move to OPEN and wait to settle
+      expect(find.text('Move to OPEN'), findsOneWidget);
+      await tester.tap(find.text('Move to OPEN'));
+      // Wait for hand movement to settle
+      for (int i = 0; i < 25; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
 
-      // Step 3: Record CLOSED endpoint
-      expect(find.text('DRIVE & RECORD CLOSED POSITION (63°)'), findsOneWidget);
-      await tester.tap(find.text('DRIVE & RECORD CLOSED POSITION (63°)'));
-      await tester.pump(const Duration(milliseconds: 1800));
+      // Capture OPEN limit
+      expect(find.textContaining('Capture OPEN'), findsOneWidget);
+      await tester.tap(find.textContaining('Capture OPEN'));
+      await tester.pump(const Duration(milliseconds: 300));
 
-      // Step 4: Save calibrated limits
+      // Step 2: Move to CLOSED and wait to settle
+      expect(find.text('Move to CLOSED'), findsOneWidget);
+      await tester.tap(find.text('Move to CLOSED'));
+      // Wait for hand movement to settle
+      for (int i = 0; i < 25; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      // Capture CLOSED limit
+      expect(find.textContaining('Capture CLOSED'), findsOneWidget);
+      await tester.tap(find.textContaining('Capture CLOSED'));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Step 3: Save calibrated limits
+      expect(find.text('CALIBRATION SUMMARY'), findsOneWidget);
       expect(find.text('SAVE & APPLY CALIBRATED LIMITS'), findsOneWidget);
       await tester.tap(find.text('SAVE & APPLY CALIBRATED LIMITS'));
-      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 400));
 
-      // Verification: Complete banner is shown
-      expect(
-          find.text(
-              'Calibration complete! Physical endpoints verified and synchronized.'),
-          findsOneWidget);
+      // Complete banner is shown
+      expect(find.textContaining('Calibration Complete!'), findsOneWidget);
       expect(find.text('RE-CALIBRATE AGAIN'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Calibration Wizard: Capture button is disabled while hand is moving (§9)',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: SyntheraProstheticApp(),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Navigate to Calibration tab
+      await tester.tap(find.byIcon(Icons.tune_outlined));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.tap(find.text('START CALIBRATION SEQUENCE'));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Tap Move to OPEN
+      await tester.tap(find.text('Move to OPEN'));
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // While moving, capture button text indicates moving
+      expect(find.textContaining('Moving ('), findsOneWidget);
     });
   });
 }

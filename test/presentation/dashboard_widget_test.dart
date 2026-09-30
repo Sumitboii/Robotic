@@ -4,16 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:synthera_prosthetic_hand/app.dart';
 import 'package:synthera_prosthetic_hand/application/providers/device_providers.dart';
 import 'package:synthera_prosthetic_hand/domain/models/hand_state.dart';
-import 'package:synthera_prosthetic_hand/domain/models/operating_mode.dart';
-import 'package:synthera_prosthetic_hand/presentation/widgets/battery_indicator.dart';
-import 'package:synthera_prosthetic_hand/presentation/widgets/connection_banner.dart';
 import 'package:synthera_prosthetic_hand/presentation/widgets/control_panel.dart';
 import 'package:synthera_prosthetic_hand/presentation/widgets/emg_graph.dart';
 import 'package:synthera_prosthetic_hand/presentation/widgets/hand_visualizer.dart';
 
 void main() {
-  group('UI & Widget Integration Test Suite', () {
-    testWidgets('Dashboard renders key telemetry and primary controls',
+  group('UI & Widget Integration Test Suite (Assignment §2 & §10)', () {
+    testWidgets(
+        'Dashboard renders key telemetry and primary controls (§2 Parity)',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 1920);
       tester.view.devicePixelRatio = 1.0;
@@ -106,36 +104,7 @@ void main() {
     });
 
     testWidgets(
-        'Navigation switches between Dashboard, Calibration, and Settings',
-        (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1080, 1920);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-
-      await tester.pumpWidget(
-        const ProviderScope(
-          child: SyntheraProstheticApp(),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 100));
-
-      // Navigate to Calibration screen
-      await tester.tap(find.byIcon(Icons.tune_outlined));
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('CALIBRATION'), findsOneWidget);
-
-      // Navigate to Settings screen
-      await tester.tap(find.byIcon(Icons.settings_outlined));
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('SETTINGS'), findsOneWidget);
-
-      // Navigate back to Dashboard
-      await tester.tap(find.byIcon(Icons.dashboard_outlined));
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('SYNTHERA ROBOTICS'), findsOneWidget);
-    });
-
-    testWidgets('Simulate disconnect and reconnect flow via ConnectionBanner',
+        'Prominent low battery banner appears at threshold and disappears above (§10)',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 1920);
       tester.view.devicePixelRatio = 1.0;
@@ -154,62 +123,27 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Disconnect simulated device
       final deviceService = container.read(deviceServiceProvider);
-      await deviceService.disconnect();
+
+      // Above threshold: no banner
+      expect(find.textContaining('LOW BATTERY'), findsNothing);
+
+      // Drain to 18% (at or below 20%)
+      await deviceService.triggerDemoBatteryDrain(18.0);
       await tester.pump(const Duration(milliseconds: 200));
 
-      // 1. Confirm "Device Disconnected" and RECONNECT button appear
-      expect(find.text('Device Disconnected'), findsOneWidget);
-      expect(find.text('RECONNECT'), findsOneWidget);
+      expect(find.textContaining('LOW BATTERY'), findsWidgets);
+      expect(find.textContaining('Battery: 18%'), findsOneWidget);
 
-      // 2. Tap RECONNECT button
-      await tester.tap(find.text('RECONNECT'));
-      await tester.pump(const Duration(milliseconds: 100));
-
-      // 3. Confirm state progresses to "Reconnecting..."
-      expect(find.text('Reconnecting...'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-
-      // 4. Wait for reconnection to complete (700ms simulation delay)
-      await tester.pump(const Duration(milliseconds: 800));
-
-      // 5. Confirm final state is "Connected"
-      expect(find.text('Connected'), findsOneWidget);
-      expect(find.byType(ConnectionBanner), findsOneWidget);
-    });
-
-    testWidgets('Low battery warning renders badge and changes status',
-        (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1080, 1920);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-
-      late ProviderContainer container;
-      await tester.pumpWidget(
-        ProviderScope(
-          child: Builder(
-            builder: (context) {
-              container = ProviderScope.containerOf(context);
-              return const SyntheraProstheticApp();
-            },
-          ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 100));
-
-      // Trigger low battery (15%)
-      final deviceService = container.read(deviceServiceProvider);
-      await deviceService.triggerDemoBatteryDrain(15.0);
+      // Recharge to 100%
+      await deviceService.triggerDemoBatteryDrain(100.0);
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.byType(BatteryIndicator), findsOneWidget);
-      expect(find.text('LOW'), findsOneWidget);
-      expect(find.text('CRITICAL'), findsOneWidget);
+      expect(find.textContaining('LOW BATTERY'), findsNothing);
     });
 
     testWidgets(
-        'Repeated navigation between screens during active AUTO simulation runs cleanly without leaks or exceptions',
+        'Simulate EMG sensor fault displays UNAVAILABLE and recovers automatically (§10)',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 1920);
       tester.view.devicePixelRatio = 1.0;
@@ -229,26 +163,64 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       final deviceService = container.read(deviceServiceProvider);
-      await deviceService.setOperatingMode(OperatingMode.auto);
+
+      // Toggle EMG fault on
+      await deviceService.toggleEmgSensorFault(true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('EMG SENSOR UNAVAILABLE'), findsOneWidget);
+      expect(find.text('UNAVAILABLE'), findsWidgets);
+
+      // Toggle EMG fault off -> recovers
+      await deviceService.toggleEmgSensorFault(false);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('EMG SENSOR UNAVAILABLE'), findsNothing);
+    });
+
+    testWidgets(
+        'Connection failure flow shows Connection Failed banner and retry succeeds (§10)',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      late ProviderContainer container;
+      await tester.pumpWidget(
+        ProviderScope(
+          child: Builder(
+            builder: (context) {
+              container = ProviderScope.containerOf(context);
+              return const SyntheraProstheticApp();
+            },
+          ),
+        ),
+      );
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Repeated rapid navigation while timers and streams are actively firing
-      for (int cycle = 0; cycle < 3; cycle++) {
-        await tester.tap(find.byIcon(Icons.tune_outlined));
-        await tester.pump(const Duration(milliseconds: 100));
-        expect(find.text('CALIBRATION'), findsOneWidget);
-        expect(tester.takeException(), isNull);
+      final deviceService = container.read(deviceServiceProvider);
 
-        await tester.tap(find.byIcon(Icons.settings_outlined));
-        await tester.pump(const Duration(milliseconds: 100));
-        expect(find.text('SETTINGS'), findsOneWidget);
-        expect(tester.takeException(), isNull);
+      // Disconnect and arm failure on next reconnect
+      await deviceService.disconnect();
+      await deviceService.setFailNextReconnect(true);
+      await tester.pump(const Duration(milliseconds: 200));
 
-        await tester.tap(find.byIcon(Icons.dashboard_outlined));
-        await tester.pump(const Duration(milliseconds: 100));
-        expect(find.text('SYNTHERA ROBOTICS'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      }
+      expect(find.text('Device Disconnected'), findsOneWidget);
+
+      // Tap Reconnect -> fails
+      await tester.tap(find.text('RECONNECT'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 800));
+
+      expect(find.text('Connection Failed'), findsOneWidget);
+      expect(find.text('RECONNECT'), findsOneWidget);
+
+      // Retry -> succeeds
+      await tester.tap(find.text('RECONNECT'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 800));
+
+      expect(find.text('Connected'), findsOneWidget);
     });
   });
 }

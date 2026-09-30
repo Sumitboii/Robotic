@@ -4,15 +4,16 @@ import '../../core/theme/app_theme.dart';
 import 'common/app_card.dart';
 import 'common/status_chip.dart';
 
-/// Clinical Real-Time Biosensor (EMG) Oscilloscope Graph.
+/// Clinical Real-Time Biosensor (EMG) Oscilloscope Graph (Assignment §5 & §10).
 ///
 /// Features smooth continuous Bezier curve rendering, soft gradient fill under curve,
 /// labeled dashed threshold limit line, high-contrast spike trigger highlighting,
-/// and [RepaintBoundary] isolation for 20Hz rendering performance.
+/// dedicated sensor fault/unavailable visual state, and [RepaintBoundary] isolation.
 class EmgGraph extends StatelessWidget {
   final List<double> emgHistory;
   final double emgThreshold;
   final double currentEmg;
+  final bool isSensorAvailable;
   final double height;
 
   const EmgGraph({
@@ -20,30 +21,37 @@ class EmgGraph extends StatelessWidget {
     required this.emgHistory,
     required this.emgThreshold,
     required this.currentEmg,
+    this.isSensorAvailable = true,
     this.height = 160.0,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isOverThreshold = currentEmg >= emgThreshold;
+    final isOverThreshold = isSensorAvailable && currentEmg >= emgThreshold;
 
-    final primaryColor = isOverThreshold
-        ? AppColors.dangerDark
-        : (isDark ? AppColors.primaryDark : AppColors.primaryLight);
+    final primaryColor = !isSensorAvailable
+        ? (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)
+        : (isOverThreshold
+            ? AppColors.dangerDark
+            : (isDark ? AppColors.primaryDark : AppColors.primaryLight));
 
-    final statusText = isOverThreshold ? 'SPIKE' : 'IDLE';
+    final statusText = !isSensorAvailable
+        ? 'UNAVAILABLE'
+        : (isOverThreshold ? 'SPIKE' : 'IDLE');
 
     return RepaintBoundary(
       child: Semantics(
-        label:
-            'EMG signal ${currentEmg.toStringAsFixed(0)} microvolts, threshold ${emgThreshold.toStringAsFixed(0)} microvolts, state $statusText',
+        label: isSensorAvailable
+            ? 'EMG signal ${currentEmg.toStringAsFixed(0)} microvolts, threshold ${emgThreshold.toStringAsFixed(0)} microvolts, state $statusText'
+            : 'EMG sensor is currently unavailable or disconnected',
         container: true,
         child: AppCard(
           padding: const EdgeInsets.all(AppSpacing.md),
-          borderColor:
-              isOverThreshold ? AppColors.dangerDark.withAlpha(160) : null,
-          borderWidth: isOverThreshold ? 1.5 : 1.0,
+          borderColor: !isSensorAvailable
+              ? AppColors.emergencyRed.withAlpha(120)
+              : (isOverThreshold ? AppColors.dangerDark.withAlpha(160) : null),
+          borderWidth: (!isSensorAvailable || isOverThreshold) ? 1.5 : 1.0,
           child: SizedBox(
             height: height - 24,
             child: Column(
@@ -52,7 +60,11 @@ class EmgGraph extends StatelessWidget {
                 // Header Bar with Signal Stats & Status
                 Row(
                   children: [
-                    Icon(Icons.show_chart, size: 16, color: primaryColor),
+                    Icon(
+                      isSensorAvailable ? Icons.show_chart : Icons.sensors_off,
+                      size: 16,
+                      color: primaryColor,
+                    ),
                     const SizedBox(width: AppSpacing.xs),
                     Expanded(
                       child: Text(
@@ -68,16 +80,22 @@ class EmgGraph extends StatelessWidget {
                     const SizedBox(width: AppSpacing.xs),
                     StatusChip(
                       label: statusText,
-                      icon: isOverThreshold ? Icons.bolt : Icons.sensors,
-                      color: isOverThreshold
-                          ? AppColors.dangerDark
-                          : (isDark
-                              ? AppColors.successDark
-                              : AppColors.successLight),
+                      icon: !isSensorAvailable
+                          ? Icons.warning_amber_rounded
+                          : (isOverThreshold ? Icons.bolt : Icons.sensors),
+                      color: !isSensorAvailable
+                          ? AppColors.emergencyRed
+                          : (isOverThreshold
+                              ? AppColors.dangerDark
+                              : (isDark
+                                  ? AppColors.successDark
+                                  : AppColors.successLight)),
                     ),
                     const SizedBox(width: AppSpacing.xs + 2),
                     Text(
-                      '${currentEmg.toStringAsFixed(0)} μV',
+                      isSensorAvailable
+                          ? '${currentEmg.toStringAsFixed(0)} μV'
+                          : 'N/A',
                       style: AppTypography.monoValueMedium(color: primaryColor),
                     ),
                   ],
@@ -88,15 +106,56 @@ class EmgGraph extends StatelessWidget {
                 Expanded(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(AppRadius.sm),
-                    child: CustomPaint(
-                      size: Size.infinite,
-                      painter: _ClinicalEmgWaveformPainter(
-                        history: emgHistory,
-                        threshold: emgThreshold,
-                        isDark: isDark,
-                        isOverThreshold: isOverThreshold,
-                        primaryColor: primaryColor,
-                      ),
+                    child: Stack(
+                      children: [
+                        CustomPaint(
+                          size: Size.infinite,
+                          painter: _ClinicalEmgWaveformPainter(
+                            history: isSensorAvailable ? emgHistory : const [],
+                            threshold: emgThreshold,
+                            isDark: isDark,
+                            isOverThreshold: isOverThreshold,
+                            primaryColor: primaryColor,
+                            isFaulted: !isSensorAvailable,
+                          ),
+                        ),
+                        if (!isSensorAvailable)
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                                vertical: AppSpacing.xs + 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: (isDark
+                                        ? AppColors.darkSurface
+                                        : AppColors.lightSurface)
+                                    .withAlpha(220),
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.md),
+                                border:
+                                    Border.all(color: AppColors.emergencyRed),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.sensors_off,
+                                      size: 14, color: AppColors.emergencyRed),
+                                  SizedBox(width: AppSpacing.xs),
+                                  Text(
+                                    'EMG SENSOR UNAVAILABLE',
+                                    style: TextStyle(
+                                      fontFamily: AppTypography.monoFontFamily,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.emergencyRed,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
@@ -115,6 +174,7 @@ class _ClinicalEmgWaveformPainter extends CustomPainter {
   final bool isDark;
   final bool isOverThreshold;
   final Color primaryColor;
+  final bool isFaulted;
 
   _ClinicalEmgWaveformPainter({
     required this.history,
@@ -122,16 +182,11 @@ class _ClinicalEmgWaveformPainter extends CustomPainter {
     required this.isDark,
     required this.isOverThreshold,
     required this.primaryColor,
+    this.isFaulted = false,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (history.isEmpty) return;
-
-    const minVal = 0.0;
-    const maxVal = 250.0;
-    const range = maxVal - minVal;
-
     // ── 1. Draw Faint Medical Grid Lines ──
     final gridPaint = Paint()
       ..color =
@@ -146,6 +201,23 @@ class _ClinicalEmgWaveformPainter extends CustomPainter {
       final x = size.width * xRatio;
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
     }
+
+    if (isFaulted || history.isEmpty) {
+      // Draw flat inactive centerline
+      final flatPaint = Paint()
+        ..color = (isDark ? Colors.white24 : Colors.black26)
+        ..strokeWidth = 1.0;
+      canvas.drawLine(
+        Offset(0, size.height / 2),
+        Offset(size.width, size.height / 2),
+        flatPaint,
+      );
+      return;
+    }
+
+    const minVal = 0.0;
+    const maxVal = 250.0;
+    const range = maxVal - minVal;
 
     // ── 2. Draw Dashed Threshold Line with Callout ──
     final threshY =

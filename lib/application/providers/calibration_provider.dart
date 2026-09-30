@@ -20,54 +20,91 @@ class CalibrationNotifier extends StateNotifier<CalibrationState> {
     );
   }
 
-  Future<void> captureOpenPosition() async {
+  Future<void> moveToOpen() async {
+    final deviceService = ref.read(deviceServiceProvider);
+    await deviceService.openHand();
+  }
+
+  Future<void> moveToClosed() async {
+    final deviceService = ref.read(deviceServiceProvider);
+    await deviceService.closeHand();
+  }
+
+  Future<bool> captureOpenPosition([double? explicitAngle]) async {
     state = state.copyWith(isBusy: true, errorMessage: null);
     try {
       final deviceService = ref.read(deviceServiceProvider);
-      final openAngle = await deviceService.captureCalibrationOpenPosition();
-      if (!mounted) return;
+      final currentTelemetry = deviceService.currentTelemetry;
+
+      // Guard: do not capture while hand is actively moving
+      if (explicitAngle == null && currentTelemetry.handState.isMoving) {
+        state = state.copyWith(
+          isBusy: false,
+          errorMessage:
+              'Cannot capture: Hand is currently moving. Please wait for position to settle.',
+        );
+        return false;
+      }
+
+      final openAngle = explicitAngle ?? currentTelemetry.positionDegrees;
       state = state.copyWith(
         currentStep: CalibrationStep.step2ClosedPosition,
         measuredMinAngle: openAngle,
         isBusy: false,
+        errorMessage: null,
       );
+      return true;
     } catch (e) {
-      if (!mounted) return;
       state = state.copyWith(
         isBusy: false,
         errorMessage: 'Failed to capture OPEN position: $e',
       );
+      return false;
     }
   }
 
-  Future<void> captureClosePosition() async {
+  Future<bool> captureClosePosition([double? explicitAngle]) async {
     state = state.copyWith(isBusy: true, errorMessage: null);
     try {
       final deviceService = ref.read(deviceServiceProvider);
-      final closeAngle = await deviceService.captureCalibrationClosePosition();
-      if (!mounted) return;
+      final currentTelemetry = deviceService.currentTelemetry;
 
-      if (state.measuredMinAngle != null &&
-          closeAngle <= state.measuredMinAngle!) {
+      // Guard: do not capture while hand is actively moving
+      if (explicitAngle == null && currentTelemetry.handState.isMoving) {
         state = state.copyWith(
           isBusy: false,
           errorMessage:
-              'Closed position ($closeAngle°) must be greater than open position (${state.measuredMinAngle}°).',
+              'Cannot capture: Hand is currently moving. Please wait for position to settle.',
         );
-        return;
+        return false;
+      }
+
+      final closeAngle = explicitAngle ?? currentTelemetry.positionDegrees;
+      final minAngle = state.measuredMinAngle ?? 0.0;
+
+      // Validate range (§9)
+      if (closeAngle <= minAngle || (closeAngle - minAngle) < 10.0) {
+        state = state.copyWith(
+          isBusy: false,
+          errorMessage:
+              'Invalid calibration range: Closed angle (${closeAngle.toStringAsFixed(1)}°) must exceed open angle (${minAngle.toStringAsFixed(1)}°) by at least 10°.',
+        );
+        return false;
       }
 
       state = state.copyWith(
         currentStep: CalibrationStep.step3Saving,
         measuredMaxAngle: closeAngle,
         isBusy: false,
+        errorMessage: null,
       );
+      return true;
     } catch (e) {
-      if (!mounted) return;
       state = state.copyWith(
         isBusy: false,
         errorMessage: 'Failed to capture CLOSED position: $e',
       );
+      return false;
     }
   }
 
@@ -75,7 +112,7 @@ class CalibrationNotifier extends StateNotifier<CalibrationState> {
     if (!state.canSave) {
       state = state.copyWith(
         errorMessage:
-            'Incomplete calibration. Both endpoints must be captured.',
+            'Incomplete calibration. Both valid endpoints must be captured.',
       );
       return false;
     }
@@ -89,7 +126,7 @@ class CalibrationNotifier extends StateNotifier<CalibrationState> {
       final deviceService = ref.read(deviceServiceProvider);
       await deviceService.saveCalibrationLimits(min, max);
 
-      // 2. Persist in settings
+      // 2. Persist in settings repository
       final currentSettings = ref.read(settingsNotifierProvider).value;
       if (currentSettings != null) {
         final updatedSettings = currentSettings.copyWith(
@@ -101,21 +138,18 @@ class CalibrationNotifier extends StateNotifier<CalibrationState> {
             .saveSettings(updatedSettings);
       }
 
-      if (mounted) {
-        state = state.copyWith(
-          currentStep: CalibrationStep.complete,
-          isBusy: false,
-        );
-      }
+      state = state.copyWith(
+        currentStep: CalibrationStep.complete,
+        isBusy: false,
+        errorMessage: null,
+      );
       return true;
     } catch (e) {
-      if (mounted) {
-        state = state.copyWith(
-          currentStep: CalibrationStep.failed,
-          isBusy: false,
-          errorMessage: 'Failed to save calibration: $e',
-        );
-      }
+      state = state.copyWith(
+        currentStep: CalibrationStep.failed,
+        isBusy: false,
+        errorMessage: 'Failed to save calibration: $e',
+      );
       return false;
     }
   }

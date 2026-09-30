@@ -6,9 +6,11 @@ import 'package:synthera_prosthetic_hand/domain/models/operating_mode.dart';
 import 'package:synthera_prosthetic_hand/domain/models/wire_protocol.dart';
 
 void main() {
-  group('Canonical WireProtocol Telemetry & Command Codec Test Suite (Spec §2)',
+  group(
+      'Canonical WireProtocol Telemetry & Command Codec Test Suite (Assignment §4)',
       () {
-    test('Exact spec §2 example parses into expected DeviceTelemetry model',
+    test(
+        'Exact assignment §4 multi-line format parses into expected DeviceTelemetry model',
         () {
       const specRaw = '''
 BATTERY:82
@@ -23,14 +25,13 @@ STATE:HOLDING
       expect(telemetry!.batteryPercentage, equals(82.0));
       expect(telemetry.positionDegrees, equals(45.0));
       expect(telemetry.emgValue, equals(127.0));
+      expect(telemetry.isEmgSensorAvailable, isTrue);
       expect(telemetry.operatingMode, equals(OperatingMode.auto));
       expect(telemetry.handState, equals(HandState.holding));
       expect(telemetry.isLowBattery, isFalse);
     });
 
-    test(
-        'Inline single-line spec example with space separators parses correctly',
-        () {
+    test('Inline single-line assignment §4 format parses correctly', () {
       const inlineRaw =
           'BATTERY:82 POSITION:45 EMG:127 MODE:AUTO STATE:HOLDING';
       final telemetry = WireProtocol.decodeTelemetry(inlineRaw);
@@ -38,8 +39,25 @@ STATE:HOLDING
       expect(telemetry!.batteryPercentage, equals(82.0));
       expect(telemetry.positionDegrees, equals(45.0));
       expect(telemetry.emgValue, equals(127.0));
+      expect(telemetry.isEmgSensorAvailable, isTrue);
       expect(telemetry.operatingMode, equals(OperatingMode.auto));
       expect(telemetry.handState, equals(HandState.holding));
+    });
+
+    test('encodeTelemetry emits canonical single-line format (§4)', () {
+      final telemetry = DeviceTelemetry(
+        deviceName: 'DAKSH-01',
+        batteryPercentage: 82.0,
+        positionDegrees: 45.0,
+        emgValue: 127.0,
+        operatingMode: OperatingMode.auto,
+        handState: HandState.holding,
+        timestamp: DateTime.now(),
+      );
+
+      final encoded = WireProtocol.encodeTelemetry(telemetry);
+      expect(encoded,
+          equals('BATTERY:82 POSITION:45 EMG:127 MODE:AUTO STATE:HOLDING'));
     });
 
     test('Round-trip encode and decode preserves every telemetry field', () {
@@ -69,6 +87,27 @@ STATE:HOLDING
       expect(decoded.emgValue, equals(185.0));
       expect(decoded.operatingMode, equals(OperatingMode.emg));
       expect(decoded.handState, equals(HandState.closing));
+    });
+
+    test(
+        'EMG sensor fault or missing EMG sets isEmgSensorAvailable to false (§10)',
+        () {
+      const faultRaw1 =
+          'BATTERY:82 POSITION:45 EMG:ERR MODE:AUTO STATE:HOLDING';
+      final t1 = WireProtocol.decodeTelemetry(faultRaw1);
+      expect(t1, isNotNull);
+      expect(t1!.isEmgSensorAvailable, isFalse);
+
+      const faultRaw2 =
+          'BATTERY:82 POSITION:45 EMG:FAULT MODE:AUTO STATE:HOLDING';
+      final t2 = WireProtocol.decodeTelemetry(faultRaw2);
+      expect(t2, isNotNull);
+      expect(t2!.isEmgSensorAvailable, isFalse);
+
+      const missingEmgRaw = 'BATTERY:82 POSITION:45 MODE:AUTO STATE:HOLDING';
+      final t3 = WireProtocol.decodeTelemetry(missingEmgRaw);
+      expect(t3, isNotNull);
+      expect(t3!.isEmgSensorAvailable, isFalse);
     });
 
     test(
@@ -142,17 +181,6 @@ STATE:OPEN
         expect(telemetry.handState, equals(HandState.open));
       });
 
-      test('Missing keys fall back to sensible defaults', () {
-        const rawPartial = 'BATTERY:50\nPOSITION:15';
-        final telemetry = WireProtocol.decodeTelemetry(rawPartial);
-        expect(telemetry, isNotNull);
-        expect(telemetry!.batteryPercentage, equals(50.0));
-        expect(telemetry.positionDegrees, equals(15.0));
-        expect(telemetry.emgValue, equals(127.0)); // sensible default
-        expect(telemetry.operatingMode, equals(OperatingMode.auto));
-        expect(telemetry.handState, equals(HandState.holding));
-      });
-
       test('Non-numeric values fall back safely to defaults', () {
         const rawInvalidNumbers = '''
 BATTERY:invalid_number
@@ -165,7 +193,8 @@ STATE:HOLDING
         expect(telemetry, isNotNull);
         expect(telemetry!.batteryPercentage, equals(82.0)); // safe default
         expect(telemetry.positionDegrees, equals(45.0)); // safe default
-        expect(telemetry.emgValue, equals(127.0)); // safe default
+        expect(telemetry.isEmgSensorAvailable,
+            isFalse); // non-numeric marks unavailable
       });
 
       test('Out-of-range values are safely clamped to physical bounds', () {

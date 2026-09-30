@@ -20,15 +20,18 @@ class CustomThemeNotifier extends ThemeModeNotifier {
 
 Future<void> capturePng(
     WidgetTester tester, GlobalKey key, String outputPath) async {
+  await tester.pump(const Duration(milliseconds: 100));
   await tester.runAsync(() async {
-    final renderObject =
+    final boundary =
         key.currentContext!.findRenderObject() as RenderRepaintBoundary;
-    final image = await renderObject.toImage(pixelRatio: 2.0);
+    final image = await boundary.toImage(pixelRatio: 1.0);
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    final pngBytes = byteData!.buffer.asUint8List();
-    final file = File(outputPath);
-    file.parent.createSync(recursive: true);
-    file.writeAsBytesSync(pngBytes);
+    if (byteData != null) {
+      final pngBytes = byteData.buffer.asUint8List();
+      final file = File(outputPath);
+      file.parent.createSync(recursive: true);
+      file.writeAsBytesSync(pngBytes);
+    }
   });
 }
 
@@ -246,7 +249,136 @@ void main() {
           tester, repaintKeyLowBatt, 'docs/screenshots/low-battery.png');
       mockServiceLowBatt.dispose();
 
-      // ── 10. EMG Mode Screenshot ──
+      // ── 10. Low Battery Banner (Assignment §10) ──
+      final repaintKeyLowBattBanner = GlobalKey();
+      final mockServiceLowBattBanner = MockDeviceService();
+      mockServiceLowBattBanner.simulatedEsp32.setBatteryPercentage(18.0);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            deviceServiceProvider.overrideWithValue(mockServiceLowBattBanner),
+            themeModeProvider
+                .overrideWith((ref) => CustomThemeNotifier(ThemeMode.dark)),
+          ],
+          child: RepaintBoundary(
+            key: repaintKeyLowBattBanner,
+            child: const SyntheraProstheticApp(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      await capturePng(tester, repaintKeyLowBattBanner,
+          'docs/screenshots/low-battery-banner.png');
+      mockServiceLowBattBanner.dispose();
+
+      // ── 11. Sensor Fault State (Assignment §10) ──
+      final repaintKeySensorFault = GlobalKey();
+      final mockServiceSensorFault = MockDeviceService();
+      mockServiceSensorFault.simulatedEsp32.toggleEmgSensorFault(true);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            deviceServiceProvider.overrideWithValue(mockServiceSensorFault),
+            themeModeProvider
+                .overrideWith((ref) => CustomThemeNotifier(ThemeMode.dark)),
+          ],
+          child: RepaintBoundary(
+            key: repaintKeySensorFault,
+            child: const SyntheraProstheticApp(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      await capturePng(
+          tester, repaintKeySensorFault, 'docs/screenshots/sensor-fault.png');
+      mockServiceSensorFault.dispose();
+
+      // ── 12. Invalid Command Rejected State (Assignment §10) ──
+      final repaintKeyInvalidCmd = GlobalKey();
+      final mockServiceInvalidCmd = MockDeviceService();
+      mockServiceInvalidCmd.simulatedEsp32.processWireCommand('FLY');
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            deviceServiceProvider.overrideWithValue(mockServiceInvalidCmd),
+            themeModeProvider
+                .overrideWith((ref) => CustomThemeNotifier(ThemeMode.dark)),
+          ],
+          child: RepaintBoundary(
+            key: repaintKeyInvalidCmd,
+            child: const SyntheraProstheticApp(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      await capturePng(
+          tester, repaintKeyInvalidCmd, 'docs/screenshots/invalid-command.png');
+      mockServiceInvalidCmd.dispose();
+
+      // ── 13. Connection Failed State (Assignment §10) ──
+      final repaintKeyConnFailed = GlobalKey();
+      final mockServiceConnFailed = MockDeviceService();
+      await mockServiceConnFailed.disconnect();
+      mockServiceConnFailed.setFailNextReconnect(true);
+      mockServiceConnFailed.reconnect();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            deviceServiceProvider.overrideWithValue(mockServiceConnFailed),
+            themeModeProvider
+                .overrideWith((ref) => CustomThemeNotifier(ThemeMode.dark)),
+          ],
+          child: RepaintBoundary(
+            key: repaintKeyConnFailed,
+            child: const SyntheraProstheticApp(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 700));
+      await capturePng(tester, repaintKeyConnFailed,
+          'docs/screenshots/connection-failed.png');
+      mockServiceConnFailed.dispose();
+
+      // ── 14. Calibration Complete Summary (Assignment §9) ──
+      final repaintKeyCalibComplete = GlobalKey();
+      final mockServiceCalibComplete = MockDeviceService();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            deviceServiceProvider.overrideWithValue(mockServiceCalibComplete),
+            themeModeProvider
+                .overrideWith((ref) => CustomThemeNotifier(ThemeMode.dark)),
+          ],
+          child: RepaintBoundary(
+            key: repaintKeyCalibComplete,
+            child: const SyntheraProstheticApp(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(find.byIcon(Icons.tune_outlined));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('START CALIBRATION SEQUENCE'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.text('Move to OPEN'));
+      for (int i = 0; i < 25; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.tap(find.textContaining('Capture OPEN'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Move to CLOSED'));
+      for (int i = 0; i < 25; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.tap(find.textContaining('Capture CLOSED'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('SAVE & APPLY CALIBRATED LIMITS'));
+      await tester.pump(const Duration(milliseconds: 400));
+      await capturePng(tester, repaintKeyCalibComplete,
+          'docs/screenshots/calibration-complete.png');
+      mockServiceCalibComplete.dispose();
+
+      // ── 15. EMG Mode Screenshot ──
       final repaintKeyEmg = GlobalKey();
       final mockServiceEmg = MockDeviceService(
         initialSettings:
@@ -270,7 +402,7 @@ void main() {
       await capturePng(tester, repaintKeyEmg, 'docs/screenshots/emg-mode.png');
       mockServiceEmg.dispose();
 
-      // ── 11. AUTO Mode Screenshot ──
+      // ── 16. AUTO Mode Screenshot ──
       final repaintKeyAuto = GlobalKey();
       final mockServiceAuto = MockDeviceService(
         initialSettings:
@@ -296,7 +428,7 @@ void main() {
           tester, repaintKeyAuto, 'docs/screenshots/auto-mode.png');
       mockServiceAuto.dispose();
 
-      // ── 12. Emergency STOP Screenshot ──
+      // ── 17. Emergency STOP Screenshot ──
       final repaintKeyStop = GlobalKey();
       final mockServiceStop = MockDeviceService();
       mockServiceStop.simulatedEsp32.hand.open();
@@ -321,7 +453,7 @@ void main() {
       mockServiceStop.dispose();
 
       // ═══════════════════════════════════════════════════════
-      // ── MULTI-DEVICE SCREENSHOT PASS (Phase 6B Step 2) ──
+      // ── MULTI-DEVICE SCREENSHOT PASS ──
       // ═══════════════════════════════════════════════════════
       final deviceConfigs = <String, Size>{
         'pixel': const Size(412, 915),
@@ -425,7 +557,7 @@ void main() {
         devMockSettings.dispose();
       }
 
-      // Verification of primary generated files
+      // Verification of all generated files
       expect(File('docs/screenshots/dashboard.png').existsSync(), isTrue);
       expect(File('docs/screenshots/dashboard-dark.png').existsSync(), isTrue);
       expect(File('docs/screenshots/dashboard-wide-dark.png').existsSync(),
@@ -438,6 +570,14 @@ void main() {
       expect(File('docs/screenshots/settings.png').existsSync(), isTrue);
       expect(File('docs/screenshots/disconnected.png').existsSync(), isTrue);
       expect(File('docs/screenshots/low-battery.png').existsSync(), isTrue);
+      expect(
+          File('docs/screenshots/low-battery-banner.png').existsSync(), isTrue);
+      expect(File('docs/screenshots/sensor-fault.png').existsSync(), isTrue);
+      expect(File('docs/screenshots/invalid-command.png').existsSync(), isTrue);
+      expect(
+          File('docs/screenshots/connection-failed.png').existsSync(), isTrue);
+      expect(File('docs/screenshots/calibration-complete.png').existsSync(),
+          isTrue);
       expect(File('docs/screenshots/emg-mode.png').existsSync(), isTrue);
       expect(File('docs/screenshots/auto-mode.png').existsSync(), isTrue);
       expect(File('docs/screenshots/emergency-stop.png').existsSync(), isTrue);

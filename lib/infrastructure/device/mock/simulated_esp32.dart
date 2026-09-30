@@ -11,9 +11,9 @@ import '../../../domain/models/operating_mode.dart';
 import '../../../domain/models/wire_protocol.dart';
 import 'simulated_prosthetic_hand.dart';
 
-/// Simulated ESP32 Embedded Microcontroller.
+/// Simulated ESP32 Embedded Microcontroller (Assignment §4).
 /// Emulates hardware timers, ADC sampling (EMG), power management (Battery),
-/// motor PWM control (Prosthetic Hand), mode state machines, and communication telemetry streams.
+/// motor PWM control (Prosthetic Hand), mode state machines, and raw serial wire protocol streams.
 class SimulatedEsp32 {
   final SimulatedProstheticHand _hand;
   final math.Random _random = math.Random();
@@ -34,15 +34,22 @@ class SimulatedEsp32 {
   bool _emgToggleStateClose =
       true; // next contraction will close if true, open if false
 
+  // Error simulation states (§10)
+  bool _emgSensorFault = false;
+  bool _failNextReconnect = false;
+
   // Auto mode timer & state
   double _autoModeHoldTimer = 0.0;
   bool _autoTargetOpen = true;
 
-  // Loop timer
+  // Loop timer & log throttling
   Timer? _simulationTimer;
   DateTime _lastTickTime = DateTime.now();
+  DateTime _lastRxLogTime = DateTime.fromMillisecondsSinceEpoch(0);
 
   // Streams
+  final StreamController<String> _rawTelemetryController =
+      StreamController<String>.broadcast();
   final StreamController<DeviceTelemetry> _telemetryController =
       StreamController<DeviceTelemetry>.broadcast();
   final StreamController<DeviceConnectionState> _connectionController =
@@ -72,6 +79,7 @@ class SimulatedEsp32 {
   }
 
   // Getters
+  Stream<String> get rawTelemetryStream => _rawTelemetryController.stream;
   Stream<DeviceTelemetry> get telemetryStream => _telemetryController.stream;
   Stream<DeviceConnectionState> get connectionStateStream =>
       _connectionController.stream;
@@ -83,17 +91,21 @@ class SimulatedEsp32 {
   String get deviceName => _deviceName;
   double get currentEmg => _currentEmg;
   bool get isEmgArmed => _emgArmed;
+  bool get isEmgSensorFaultSimulated => _emgSensorFault;
+  bool get willFailNextReconnect => _failNextReconnect;
 
   DeviceTelemetry get currentTelemetry => DeviceTelemetry(
         deviceName: _deviceName,
         batteryPercentage: _batteryPercentage,
         positionDegrees: _hand.currentAngle,
-        emgValue: _currentEmg,
+        emgValue: _emgSensorFault ? 0.0 : _currentEmg,
+        isEmgSensorAvailable: !_emgSensorFault,
         operatingMode: _mode,
         handState: _hand.state,
         minAngle: _hand.minAngle,
         maxAngle: _hand.maxAngle,
         isLowBattery: _batteryPercentage <= _batteryWarningThreshold,
+        rawFrame: currentWireTelemetry,
         timestamp: DateTime.now(),
       );
 
@@ -113,8 +125,8 @@ class SimulatedEsp32 {
     }
 
     final now = DateTime.now();
-    final dtSeconds = (now.difference(_lastTickTime).inMicroseconds / 1000000.0)
-        .clamp(0.001, 0.2);
+    final diff = now.difference(_lastTickTime).inMicroseconds / 1000000.0;
+    final dtSeconds = (diff < 0.02 || diff > 0.2) ? 0.05 : diff;
     _lastTickTime = now;
 
     // 1. Update hand physics
@@ -123,21 +135,38 @@ class SimulatedEsp32 {
     // 2. Update battery drain
     _updateBattery(dtSeconds);
 
-    // 3. Update EMG signal synthesis
+    // 3. Update EMG signal synthesis (if sensor active)
     _updateEmgSignal(dtSeconds);
 
     // 4. Update operating mode state machines
     _updateModeLogic(dtSeconds);
 
-    // 5. Emit telemetry packet
+    // 5. Emit raw wire frame (§4)
+    final rawFrame = currentWireTelemetry;
+    if (!_rawTelemetryController.isClosed) {
+      _rawTelemetryController.add(rawFrame);
+    }
+
+    // 6. Direct telemetry stream broadcast
     final telemetry = currentTelemetry;
     if (!_telemetryController.isClosed) {
       _telemetryController.add(telemetry);
+    }
+
+    // 7. Throttled serial logging (~1 per second)
+    if (now.difference(_lastRxLogTime).inMilliseconds >= 1000) {
+      _lastRxLogTime = now;
+      _log(DeviceLogEntry.info('RX $rawFrame'));
     }
   }
 
   /// Synthesizes continuous, physiologically plausible EMG signal with noise and contraction peaks
   void _updateEmgSignal(double dtSeconds) {
+    if (_emgSensorFault) {
+      _currentEmg = 0.0;
+      return;
+    }
+
     _emgPhase += dtSeconds * 3.5; // oscillation rate
 
     // Baseline carrier + low frequency wave + noise
@@ -242,18 +271,37 @@ class SimulatedEsp32 {
     }
   }
 
-  /// Canonical wire protocol serialization of current telemetry state (Spec §2)
-  String get currentWireTelemetry =>
-      WireProtocol.encodeTelemetry(currentTelemetry);
+  /// Canonical wire protocol serialization of current telemetry state (Assignment §4)
+  String get currentWireTelemetry {
+    final emgStr = _emgSensorFault
+        ? 'ERR'
+        : (_currentEmg == _currentEmg.roundToDouble()
+            ? _currentEmg.toStringAsFixed(0)
+            : _currentEmg.toStringAsFixed(1));
+    final battStr = _batteryPercentage == _batteryPercentage.roundToDouble()
+        ? _batteryPercentage.toStringAsFixed(0)
+        : _batteryPercentage.toStringAsFixed(1);
+    final posStr = _hand.currentAngle == _hand.currentAngle.roundToDouble()
+        ? _hand.currentAngle.toStringAsFixed(0)
+        : _hand.currentAngle.toStringAsFixed(1);
 
-  /// Process raw text wire protocol command (Spec §2)
+    return 'BATTERY:$battStr POSITION:$posStr EMG:$emgStr MODE:${_mode.displayName} STATE:${_hand.state.displayName}';
+  }
+
+  /// Process raw text wire protocol command (Assignment §4)
   void processWireCommand(String rawCommand) {
-    final command = WireProtocol.decodeCommand(rawCommand);
+    final trimmed = rawCommand.trim();
+    if (_connectionState != DeviceConnectionState.connected) {
+      _log(
+          DeviceLogEntry.warning('Command rejected: Device is not connected.'));
+      return;
+    }
+
+    final command = WireProtocol.decodeCommand(trimmed);
     if (command != null) {
       processCommand(command);
     } else {
-      _log(DeviceLogEntry.warning(
-          'Unknown or malformed wire command: $rawCommand'));
+      _log(DeviceLogEntry.error('ERR:INVALID_COMMAND: $trimmed'));
     }
   }
 
@@ -265,8 +313,7 @@ class SimulatedEsp32 {
       return;
     }
 
-    _log(DeviceLogEntry.command(
-        'Received command: ${WireProtocol.encodeCommand(command)}'));
+    _log(DeviceLogEntry.command('TX ${WireProtocol.encodeCommand(command)}'));
 
     switch (command.type) {
       case DeviceCommandType.open:
@@ -355,7 +402,7 @@ class SimulatedEsp32 {
     _log(DeviceLogEntry.info('Settings applied to ESP32 firmware.'));
   }
 
-  // Connection Simulation
+  // Connection Simulation (§10)
   Future<void> connect() async {
     if (_connectionState == DeviceConnectionState.connected) return;
 
@@ -384,16 +431,28 @@ class SimulatedEsp32 {
     _connectionController.add(_connectionState);
     _log(DeviceLogEntry.info('Attempting automatic BLE reconnection...'));
 
-    await Future.delayed(const Duration(milliseconds: 700));
+    await Future.delayed(const Duration(milliseconds: 600));
 
-    _connectionState = DeviceConnectionState.connected;
-    _connectionController.add(_connectionState);
-    _lastTickTime = DateTime.now();
-    _log(DeviceLogEntry.info('ESP32 reconnected successfully.'));
+    if (_failNextReconnect) {
+      _failNextReconnect = false;
+      _connectionState = DeviceConnectionState.connectionFailed;
+      _connectionController.add(_connectionState);
+      _log(
+          DeviceLogEntry.error('BLE Reconnection failed: Device unreachable.'));
+    } else {
+      _connectionState = DeviceConnectionState.connected;
+      _connectionController.add(_connectionState);
+      _lastTickTime = DateTime.now();
+      _log(DeviceLogEntry.info('ESP32 reconnected successfully.'));
+    }
   }
 
-  // Demo helpers
+  // Demo & Fault Injection Helpers (§10)
   void triggerEmgSpike([double spikeValue = 160.0]) {
+    if (_emgSensorFault) {
+      _log(DeviceLogEntry.warning('Cannot spike EMG: Sensor is faulted'));
+      return;
+    }
     _emgSpikeIntensity = spikeValue;
     _log(DeviceLogEntry.info(
         'Simulated bio-signal spike triggered: +$spikeValue'));
@@ -405,6 +464,27 @@ class SimulatedEsp32 {
         'Demo override: Battery set to ${_batteryPercentage.toStringAsFixed(0)}%'));
   }
 
+  void setDeviceName(String name) {
+    _deviceName = name;
+  }
+
+  void toggleEmgSensorFault([bool? enable]) {
+    _emgSensorFault = enable ?? !_emgSensorFault;
+    if (_emgSensorFault) {
+      _log(DeviceLogEntry.error(
+          'FAULT: EMG bio-potential sensor disconnected/offline'));
+    } else {
+      _log(DeviceLogEntry.info(
+          'RESTORED: EMG sensor signal online and operational'));
+    }
+  }
+
+  void setFailNextReconnect(bool fail) {
+    _failNextReconnect = fail;
+    _log(DeviceLogEntry.warning(
+        'Demo setting: Next reconnect will ${fail ? 'FAIL' : 'SUCCEED'}'));
+  }
+
   void _log(DeviceLogEntry entry) {
     if (!_logController.isClosed) {
       _logController.add(entry);
@@ -413,6 +493,7 @@ class SimulatedEsp32 {
 
   void dispose() {
     _simulationTimer?.cancel();
+    _rawTelemetryController.close();
     _telemetryController.close();
     _connectionController.close();
     _logController.close();

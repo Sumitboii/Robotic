@@ -9,7 +9,7 @@ import '../../../domain/models/operating_mode.dart';
 import '../../../domain/models/wire_protocol.dart';
 import '../device_service.dart';
 
-/// Production BLE Device Service blueprint for ESP32 hardware communication.
+/// Production BLE Device Service blueprint for ESP32 hardware communication (Assignment §4 & §11).
 ///
 /// STATUS: Designed, not hardware-verified.
 ///
@@ -18,16 +18,10 @@ import '../device_service.dart';
 /// - RX Char UUID: 6E400002-B5A3-F393-E0A9-E50E24DCCA9E (Command Write - App -> ESP32)
 /// - TX Char UUID: 6E400003-B5A3-F393-E0A9-E50E24DCCA9E (Telemetry Notify - ESP32 -> App)
 ///
-/// Canonical Line-Oriented Wire Protocol (Spec §2):
-/// - Commands: "OPEN\n", "CLOSE\n", "STOP\n", "CALIBRATE\n", "SET_MODE:EMG\n", "UPDATE_LIMITS:0.0:63.0\n"
+/// Canonical Single-Line Wire Protocol (Assignment §4):
+/// - Commands: "OPEN", "CLOSE", "STOP", "CALIBRATE", "SET_MODE:EMG", "UPDATE_LIMITS:0.0:63.0"
 /// - Telemetry Packet (20 Hz):
-///   ```text
-///   BATTERY:82
-///   POSITION:45
-///   EMG:127
-///   MODE:AUTO
-///   STATE:HOLDING
-///   ```
+///   `BATTERY:82 POSITION:45 EMG:127 MODE:AUTO STATE:HOLDING`
 ///
 /// Swapping to Physical Hardware:
 /// In `lib/application/providers/device_providers.dart`, replace:
@@ -82,7 +76,7 @@ class BleDeviceService implements DeviceService {
     // 1. Scan for peripheral with serviceUuid
     // 2. Connect to peripheral and negotiate MTU 512
     // 3. Discover GATT services & characteristics
-    // 4. Subscribe to txCharacteristic notifications -> _handleIncomingBlePacket
+    // 4. Subscribe to txCharacteristic notifications -> handleIncomingBlePacket
   }
 
   @override
@@ -102,11 +96,18 @@ class BleDeviceService implements DeviceService {
   @override
   Future<void> sendCommand(DeviceCommand command) async {
     final payload = '${WireProtocol.encodeCommand(command)}\n';
-    _logController.add(
-        DeviceLogEntry.command('BLE TX [$rxCharacteristicUuid]: $payload'));
+    _logController
+        .add(DeviceLogEntry.command('TX [$rxCharacteristicUuid]: $payload'));
     // In live BLE:
     // final bytes = utf8.encode(payload);
     // await rxCharacteristic.write(bytes, withoutResponse: false);
+  }
+
+  @override
+  Future<void> sendRawCommand(String rawCommand) async {
+    final payload = '$rawCommand\n';
+    _logController
+        .add(DeviceLogEntry.command('TX [$rxCharacteristicUuid]: $payload'));
   }
 
   @override
@@ -136,15 +137,11 @@ class BleDeviceService implements DeviceService {
 
   @override
   Future<double> captureCalibrationOpenPosition() async {
-    await openHand();
-    await Future.delayed(const Duration(milliseconds: 1500));
     return _lastTelemetry.positionDegrees;
   }
 
   @override
   Future<double> captureCalibrationClosePosition() async {
-    await closeHand();
-    await Future.delayed(const Duration(milliseconds: 1500));
     return _lastTelemetry.positionDegrees;
   }
 
@@ -165,6 +162,18 @@ class BleDeviceService implements DeviceService {
 
   @override
   Future<void> simulateConnectionDrop() async => disconnect();
+
+  @override
+  Future<void> toggleEmgSensorFault([bool? enable]) async {}
+
+  @override
+  Future<void> setFailNextReconnect(bool fail) async {}
+
+  @override
+  bool get isEmgSensorFaultSimulated => false;
+
+  @override
+  bool get willFailNextReconnect => false;
 
   /// Called when a BLE GATT notification packet is received from the ESP32
   void handleIncomingBlePacket(List<int> bytes) {

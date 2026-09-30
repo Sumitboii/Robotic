@@ -4,7 +4,7 @@ import 'package:synthera_prosthetic_hand/domain/models/operating_mode.dart';
 import 'package:synthera_prosthetic_hand/infrastructure/device/mock/mock_device_service.dart';
 
 void main() {
-  group('MockDeviceService API Test Suite', () {
+  group('MockDeviceService API Test Suite (Assignment §4 & §10)', () {
     late MockDeviceService service;
 
     setUp(() {
@@ -15,7 +15,9 @@ void main() {
       service.dispose();
     });
 
-    test('Telemetry and Connection streams emit valid data', () async {
+    test(
+        'Telemetry stream receives and decodes raw wire frames from simulated ESP32 (§4)',
+        () async {
       expect(service.currentConnectionState.isConnected, isTrue);
       expect(service.currentTelemetry.deviceName, equals('DAKSH-01'));
 
@@ -23,9 +25,12 @@ void main() {
       expect(telemetry.deviceName, equals('DAKSH-01'));
       expect(telemetry.batteryPercentage, greaterThanOrEqualTo(0.0));
       expect(telemetry.positionDegrees, greaterThanOrEqualTo(0.0));
+      expect(telemetry.isEmgSensorAvailable, isTrue);
     });
 
-    test('Command shortcuts actuate simulated device', () async {
+    test(
+        'Command shortcuts send wire commands to actuate simulated device (§4)',
+        () async {
       await service.openHand();
       expect(service.simulatedEsp32.hand.targetAngle, equals(0.0));
 
@@ -34,6 +39,28 @@ void main() {
 
       await service.closeHand();
       expect(service.simulatedEsp32.hand.targetAngle, equals(63.0));
+    });
+
+    test(
+        'sendRawCommand sends arbitrary text frame for fuzz/error testing (§10)',
+        () async {
+      await service.sendRawCommand('FLY');
+      // Should not throw and ESP32 logs error
+      expect(service.currentTelemetry, isNotNull);
+    });
+
+    test(
+        'EMG sensor fault injection sets telemetry isEmgSensorAvailable to false (§10)',
+        () async {
+      await service.toggleEmgSensorFault(true);
+      expect(service.isEmgSensorFaultSimulated, isTrue);
+
+      final telemetry = await service.telemetryStream.first;
+      expect(telemetry.isEmgSensorAvailable, isFalse);
+
+      // Recovery
+      await service.toggleEmgSensorFault(false);
+      expect(service.isEmgSensorFaultSimulated, isFalse);
     });
 
     test('Mode changes and Settings update sync with device', () async {

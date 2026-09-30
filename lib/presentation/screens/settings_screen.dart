@@ -400,7 +400,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                             const SizedBox(height: AppSpacing.md),
                             DropdownButtonFormField<OperatingMode>(
-                              value: _selectedMode,
+                              initialValue: _selectedMode,
                               decoration: InputDecoration(
                                 labelText: 'Startup Mode',
                                 prefixIcon: Icon(

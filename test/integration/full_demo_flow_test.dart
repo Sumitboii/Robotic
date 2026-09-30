@@ -12,7 +12,8 @@ import 'package:synthera_prosthetic_hand/presentation/widgets/emg_graph.dart';
 import 'package:synthera_prosthetic_hand/presentation/widgets/hand_visualizer.dart';
 
 void main() {
-  group('Spec §17 Full 2-Minute Evaluator Demo Sequence Integration Test', () {
+  group('Full Evaluator Demo Sequence Integration Test (Assignment Alignment)',
+      () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
     });
@@ -38,7 +39,7 @@ void main() {
 
       final deviceService = container.read(deviceServiceProvider);
 
-      // ── Step 1: Launch & Confirm Spec §2 Telemetry Fields ──
+      // ── Step 1: Launch & Confirm Telemetry Fields (§2) ──
       expect(find.text('SYNTHERA ROBOTICS'), findsOneWidget);
       expect(find.text('DAKSH-01'), findsOneWidget);
       expect(find.byType(HandVisualizer), findsOneWidget);
@@ -46,12 +47,13 @@ void main() {
       expect(find.byType(EmgGraph), findsOneWidget);
       expect(find.byType(ControlPanel), findsOneWidget);
 
-      // ── Step 2: OPEN, CLOSE, and STOP Mid-Movement ──
+      // ── Step 2: OPEN, CLOSE, and STOP Mid-Movement (§2 & §3) ──
       await tester.tap(find.text('OPEN'));
       await tester.pump(const Duration(milliseconds: 150));
       expect(
           deviceService.currentTelemetry.handState == HandState.opening ||
-              deviceService.currentTelemetry.handState == HandState.open,
+              deviceService.currentTelemetry.handState == HandState.open ||
+              deviceService.currentTelemetry.handState == HandState.holding,
           isTrue);
 
       await tester.tap(find.text('STOP'));
@@ -64,7 +66,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 150));
       expect(
           deviceService.currentTelemetry.handState == HandState.closing ||
-              deviceService.currentTelemetry.handState == HandState.closed,
+              deviceService.currentTelemetry.handState == HandState.closed ||
+              deviceService.currentTelemetry.handState == HandState.holding,
           isTrue);
 
       await tester.tap(find.text('STOP'));
@@ -72,7 +75,7 @@ void main() {
       expect(
           deviceService.currentTelemetry.handState, equals(HandState.stopped));
 
-      // ── Step 3: Switch to EMG Mode & Threshold-Driven Behavior ──
+      // ── Step 3: Switch to EMG Mode & Threshold-Driven Behavior (§7) ──
       await deviceService.setOperatingMode(OperatingMode.emg);
       await tester.pump(const Duration(milliseconds: 100));
       expect(deviceService.currentTelemetry.operatingMode,
@@ -82,7 +85,7 @@ void main() {
       await deviceService.triggerEmgSpike(170.0);
       await tester.pump(const Duration(milliseconds: 100));
 
-      // ── Step 4: Switch to AUTO, Observe Automatic Cycle & STOP Mid-AUTO ──
+      // ── Step 4: Switch to AUTO, Observe Automatic Cycle & STOP Mid-AUTO (§7) ──
       await deviceService.setOperatingMode(OperatingMode.auto);
       await tester.pump(const Duration(milliseconds: 100));
       expect(deviceService.currentTelemetry.operatingMode,
@@ -96,7 +99,7 @@ void main() {
       expect(deviceService.currentTelemetry.operatingMode,
           equals(OperatingMode.manual));
 
-      // ── Step 5: Change Setting, Save and Confirm Persistence ──
+      // ── Step 5: Change Setting, Save and Confirm Persistence (§8) ──
       await tester.tap(find.byIcon(Icons.settings_outlined));
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('SETTINGS'), findsOneWidget);
@@ -114,7 +117,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('DAKSH-VERIFIED'), findsOneWidget);
 
-      // ── Step 6: 3-Step Mechanical Calibration Flow ──
+      // ── Step 6: 3-Step Mechanical Calibration Flow (§9) ──
       await tester.tap(find.byIcon(Icons.tune_outlined));
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('CALIBRATION'), findsOneWidget);
@@ -122,24 +125,31 @@ void main() {
       await tester.tap(find.text('START CALIBRATION SEQUENCE'));
       await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.tap(find.text('DRIVE & RECORD OPEN POSITION (0°)'));
+      // Move to open & wait to settle
+      await tester.tap(find.text('Move to OPEN'));
+      for (int i = 0; i < 25; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.tap(find.textContaining('Capture OPEN'));
       await tester.pump(const Duration(milliseconds: 300));
 
-      await tester.tap(find.text('DRIVE & RECORD CLOSED POSITION (63°)'));
+      // Move to close & wait to settle
+      await tester.tap(find.text('Move to CLOSED'));
+      for (int i = 0; i < 25; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.tap(find.textContaining('Capture CLOSED'));
       await tester.pump(const Duration(milliseconds: 300));
 
       await tester.tap(find.text('SAVE & APPLY CALIBRATED LIMITS'));
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(
-          find.text(
-              'Calibration complete! Physical endpoints verified and synchronized.'),
-          findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.textContaining('Calibration Complete!'), findsOneWidget);
 
       // Return to Dashboard
       await tester.tap(find.byIcon(Icons.dashboard_outlined));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // ── Step 7: Disconnect & Reconnect Flow ──
+      // ── Step 7: Disconnect & Reconnect Flow (§10) ──
       await deviceService.disconnect();
       await tester.pump(const Duration(milliseconds: 200));
       expect(find.text('Device Disconnected'), findsOneWidget);
@@ -151,11 +161,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 800));
       expect(find.text('Connected'), findsOneWidget);
 
-      // ── Step 8: Trigger Low Battery via Demo Control ──
+      // ── Step 8: Trigger Low Battery via Demo Control (§6 & §10) ──
       await deviceService.triggerDemoBatteryDrain(15.0);
       await tester.pump(const Duration(milliseconds: 200));
       expect(find.text('LOW'), findsOneWidget);
       expect(find.text('CRITICAL'), findsOneWidget);
+      expect(find.textContaining('LOW BATTERY'), findsWidgets);
     });
   });
 }

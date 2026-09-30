@@ -1,234 +1,177 @@
 # Synthera Robotics Prosthetic Hand Simulator
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.24.5-02569B?logo=flutter)](https://flutter.dev)
-[![Dart](https://img.shields.io/badge/Dart-3.5.4-0175C2?logo=dart)](https://dart.dev)
-[![Riverpod](https://img.shields.io/badge/State-Riverpod%202.5-blue)](https://riverpod.dev)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-A modern, high-precision mobile application and embedded hardware simulation platform designed for the **Synthera Robotics ESP32-based Prosthetic Hand (DAKSH-01)**.
-
-This software delivers an end-to-end control console, continuous kinematic physics simulation, real-time bio-potential (EMG) oscillography, battery power management, 3-step guided mechanical calibration, and an interchangeable hardware abstraction layer prepared for BLE GATT production hardware.
+A cross-platform mobile application and embedded hardware simulation platform designed for the Synthera Robotics ESP32-based Prosthetic Hand (DAKSH-01).
 
 ---
 
-## 📸 Screenshots & Visual QA
+## 1. Project Overview
 
-> **Note on Screenshot Production:** All 9 screenshots below are headless golden renders produced programmatically via [`test/screenshot_generator_test.dart`](file:///C:/Users/ssing/OneDrive/Desktop/Project%20Files/Robotic/test/screenshot_generator_test.dart) at $2\times\text{ HiDPI}$ resolution; they are not manual screen captures from a running device.
+This application serves as an operator console and digital twin for the Synthera DAKSH-01 bionic prosthetic hand. It implements:
+- Real-time telemetry monitoring (angular position, EMG bio-potential, battery level, operational state).
+- Multi-mode operational control (MANUAL, EMG bio-signal triggered, and AUTO cyclic sequence).
+- Interactive 3-step guided calibration with physical endpoint validation.
+- Hardware abstraction layer communicating over canonical serial wire protocol text frames, interchangeable with BLE GATT production drivers.
 
-| Dashboard (Light Theme) | Calibration Wizard | Device Settings |
+---
+
+## 2. Live Demo
+
+- **Hosted Web Application**: [https://sumitboii.github.io/Robotic/](https://sumitboii.github.io/Robotic/)
+- *Note:* GitHub Pages must be enabled in repository settings pointing to the `gh-pages` branch or deployment artifact.
+- **Local Web Server**: Run `python -m http.server 8080 --directory build/web` and navigate to `http://localhost:8080`.
+
+---
+
+## 3. Technologies Used
+
+- **Flutter & Dart**: Cross-platform reactive UI framework and strongly-typed object-oriented language for mobile, desktop, and web.
+- **Riverpod (`flutter_riverpod: ^2.5.1`)**: Compile-time safe, testable state management and dependency injection decoupled from the widget tree.
+- **fl_chart (`^0.68.0`)**: Performance-optimized oscilloscope plotting library for real-time biosensor streams.
+- **shared_preferences (`^2.2.3`)**: Platform-agnostic persistent key-value storage for device settings and calibration limits.
+- **Inter & IBM Plex Mono Fonts**: Variable typography assets bundled locally for high-contrast clinical legibility and tabular figure alignment.
+- **device_preview (`^1.2.0`)**: Multi-device viewport simulation utility (isolated exclusively to `lib/main_preview.dart`).
+
+---
+
+## 4. Application Architecture
+
+The application is structured into four isolated architectural layers:
+
+```
++-------------------------------------------------------------------------+
+|                           PRESENTATION LAYER                            |
+|  DashboardScreen  •  CalibrationScreen  •  SettingsScreen  •  AppRouter |
+|  HandVisualizer   •  EmgGraph           •  BatteryIndicator•  Controls  |
++------------------------------------+------------------------------------+
+                                     | (Riverpod StateNotifiers & Streams)
++------------------------------------v------------------------------------+
+|                        APPLICATION / STATE LAYER                        |
+|  DeviceProviders  •  SettingsProvider  •  CalibrationProvider  •  Theme |
++------------------------------------+------------------------------------+
+                                     | (Pure Domain Models & Commands)
++------------------------------------v------------------------------------+
+|                              DOMAIN LAYER                               |
+|  DeviceTelemetry  •  DeviceCommand  •  DeviceSettings  •  OperatingMode |
+|  HandState        •  ConnectionState•  CalibrationState•  WireProtocol  |
++------------------------------------+------------------------------------+
+                                     | (DeviceService Interface)
++------------------------------------v------------------------------------+
+|                    DATA & INFRASTRUCTURE LAYER                          |
+|  DeviceService (Abstract Interface)                                     |
+|  |-- MockDeviceService ---------> SimulatedEsp32 --> SimulatedHand      |
+|  |-- BleDeviceService  ---------> ESP32 BLE GATT --> Physical Actuator  |
+|  +-- LocalSettingsRepository ---> SharedPreferences Persistence         |
++-------------------------------------------------------------------------+
+```
+
+Architectural layer boundaries are strictly verified via automated tests (`test/architecture/layer_boundaries_test.dart`):
+- `lib/domain/` contains zero dependencies on Flutter or outer layers.
+- `lib/presentation/` interacts exclusively with the `DeviceService` interface and never imports simulation models.
+- `lib/application/` interacts exclusively with abstractions, with only the composition root (`device_providers.dart`) instantiating the service implementation.
+
+---
+
+## 5. How the Simulated Device Works
+
+The simulation engine (`SimulatedEsp32`) executes a continuous 20 Hz tick loop modeling embedded hardware behavior:
+
+1. **Kinematics Engine**: `SimulatedProstheticHand` models smooth angular velocity transitions ($0.0^\circ$ to $63.0^\circ$), velocity damping, and mechanical limit clamping.
+2. **EMG Bio-Potential Model**: Synthesizes a baseline oscillating carrier wave ($52\,\mu\text{V}$) with stochastic noise and contraction bursts ($>120\,\mu\text{V}$). A hysteresis edge trigger prevents multiple triggers from a single muscle contraction.
+3. **Battery Model**: Active discharge simulation draining power at $0.08\%/\text{s}$ during motion and $0.008\%/\text{s}$ while idle. Triggers a prominent warning at $\le 20\%$ and automatic motor cutoff at $0\%$.
+4. **Operating Modes**:
+   - **MANUAL**: Direct execution of `OPEN`, `CLOSE`, and priority `EMERGENCY STOP`.
+   - **EMG**: Bio-potential threshold triggers alternating close $\leftrightarrow$ open transitions.
+   - **AUTO**: Autonomous cyclic sequence (`OPEN` $\to$ hold $1.6\,\text{s}$ $\to$ `CLOSE` $\to$ hold $1.6\,\text{s}$).
+5. **Canonical Wire Protocol**: Emits and parses single-line plain text frames over a serial text stream:
+   ```text
+   BATTERY:82 POSITION:45 EMG:127 MODE:AUTO STATE:HOLDING
+   ```
+
+---
+
+## 6. How to Connect to ESP32 / BLE
+
+The application is architected for drop-in connectivity with physical ESP32 hardware via BLE GATT:
+
+### GATT Service Specification
+- **Service UUID**: `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` (Synthera Prosthetic Service)
+- **RX Characteristic UUID (Write)**: `6E400002-B5A3-F393-E0A9-E50E24DCCA9E` (Commands from App $\to$ ESP32)
+- **TX Characteristic UUID (Notify)**: `6E400003-B5A3-F393-E0A9-E50E24DCCA9E` (Telemetry 20 Hz from ESP32 $\to$ App)
+
+### Hardware Driver Swap
+In `lib/application/providers/device_providers.dart`, replace:
+```dart
+final deviceServiceProvider = Provider<DeviceService>((ref) {
+  final service = MockDeviceService();
+  ref.onDispose(() => service.dispose());
+  return service;
+});
+```
+with:
+```dart
+final deviceServiceProvider = Provider<DeviceService>((ref) {
+  final service = BleDeviceService(targetDeviceId: 'DAKSH-01');
+  ref.onDispose(() => service.dispose());
+  return service;
+});
+```
+Zero modifications are required anywhere in UI screens or presentation widgets.
+
+---
+
+## 7. Installation and Run Instructions
+
+### Prerequisites
+- Flutter SDK (version 3.24.5 or compatible)
+- Dart SDK (version 3.5.4 or compatible)
+
+### Setup & Run
+```bash
+# Clone repository
+git clone https://github.com/Sumitboii/Robotic.git
+cd Robotic
+
+# Install dependencies
+flutter pub get
+
+# Run test suite
+flutter test
+
+# Run application on Chrome / Web
+flutter run -d chrome
+
+# Run application on Windows desktop
+flutter run -d windows
+```
+
+For complete test suite details and mutation test documentation, see [docs/TESTING.md](docs/TESTING.md).
+
+---
+
+## 8. Screenshots
+
+| Dashboard (Light) | Dashboard (Dark) | Calibration Wizard |
 |:---:|:---:|:---:|
-| ![Dashboard Light](docs/screenshots/dashboard.png) | ![Calibration](docs/screenshots/calibration.png) | ![Settings](docs/screenshots/settings.png) |
+| ![Dashboard Light](docs/screenshots/dashboard.png) | ![Dashboard Dark](docs/screenshots/dashboard-dark.png) | ![Calibration](docs/screenshots/calibration.png) |
 
-| EMG Contraction Mode | AUTO Cyclic Mode | Emergency STOP |
+| EMG Mode Trigger | AUTO Cyclic Mode | Emergency STOP |
 |:---:|:---:|:---:|
 | ![EMG Mode](docs/screenshots/emg-mode.png) | ![AUTO Mode](docs/screenshots/auto-mode.png) | ![Emergency STOP](docs/screenshots/emergency-stop.png) |
 
-| Disconnected State | Low Battery Warning | Dashboard (Dark Theme) |
+| Low Battery Banner | EMG Sensor Fault State | Connection Failure & Retry |
 |:---:|:---:|:---:|
-| ![Disconnected](docs/screenshots/disconnected.png) | ![Low Battery](docs/screenshots/low-battery.png) | ![Dashboard Dark](docs/screenshots/dashboard-dark.png) |
+| ![Low Battery Banner](docs/screenshots/low-battery-banner.png) | ![Sensor Fault](docs/screenshots/sensor-fault.png) | ![Connection Failed](docs/screenshots/connection-failed.png) |
+
+| Disconnected State | Device Settings | Calibration Complete |
+|:---:|:---:|:---:|
+| ![Disconnected](docs/screenshots/disconnected.png) | ![Settings](docs/screenshots/settings.png) | ![Calibration Complete](docs/screenshots/calibration-complete.png) |
+
+*Note on screenshot production: All screenshots are programmatic golden renders generated via `test/screenshot_generator_test.dart`.*
 
 ---
 
-## 💻 Verified Execution Targets
+## 9. Known Limitations
 
-- **Flutter Web (`Chrome / Edge`)**: Production release bundle compiled and verified via automated build tools (`flutter build web --release`). No manual interactive verification was conducted.
-- **Windows Desktop (`windows-x64`)**: Verification conducted solely via automated test harness (`flutter test`). No manual interactive runtime session was performed in this headless environment.
-- **Automated Test Suite (`flutter test`)**: 73/73 unit, widget, domain, and architecture tests passing with 100% consistency across multiple consecutive runs.
-- **Android Target**: Android SDK was not installed on the host machine; Android APK was not built and mobile runtime was not verified.
-- **Physical BLE Hardware**: BLE communication was verified via architectural abstraction and codec unit tests; no physical ESP32 hardware was connected or tested.
-
----
-
-## 🎛️ Key Capabilities
-
-- **🎛️ Real-Time Telemetry & Control Dashboard**: Live monitoring of angular position, EMG signal intensity ($\mu\text{V}$), battery percentage, connection status, and mechanical hand state.
-- **🦾 Custom Articulated Vector Hand Visualizer**: Fully vector-rendered bionic hand featuring 5 independent kinematic finger pivots (Thumb, Index, Middle, Ring, Pinky), tendon guides, servo status glow ring, and continuous angle tracking ($0^\circ \to 63^\circ$).
-- **📈 Real-Time EMG Bio-Signal Oscilloscope**: Continuous $20\text{ Hz}$ waveform generator with baseline oscillation, stochastic noise, contraction spikes, and configurable hysteresis threshold trigger.
-- **🔋 Battery Management & Safe Cutoff**: Active discharge model with configurable low-battery alert threshold ($20\%$) and automatic motor cutoff at $0\%$.
-- **🔄 Multi-Mode Operation**:
-  - **MANUAL**: Direct operator control with `OPEN`, `CLOSE`, and priority `EMERGENCY STOP`.
-  - **EMG**: Bio-signal edge trigger mode (alternating contractions trigger Close $\leftrightarrow$ Open).
-  - **AUTO**: Automated cyclic sequence (`OPEN` $\to$ `HOLD` $\to$ `CLOSE` $\to$ `HOLD`).
-- **🎯 3-Step Guided Mechanical Calibration**: Interactive wizard to measure and store zero-reference open limit and closed stroke endpoints, persisting calibrated limits to local storage.
-- **🔌 Future-Proof BLE GATT Abstraction**: Seamless `DeviceService` contract decoupling the presentation layer from hardware implementations, allowing direct drop-in replacement with `BleDeviceService`.
-- **⚡ Evaluator Demo Suite & Event Logs**: Quick demo drawer to simulate triggered EMG spikes, low battery conditions, connection dropouts, and view live firmware serial logs.
-
----
-
-## 🏗️ Architecture & Layer Isolation
-
-The codebase enforces strict clean architecture principles validated via automated boundary tests:
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           PRESENTATION LAYER                            │
-│  DashboardScreen  •  CalibrationScreen  •  SettingsScreen  •  AppRouter │
-│  HandVisualizer   •  EmgGraph           •  BatteryIndicator•  Controls  │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │ (Riverpod StateNotifiers & Streams)
-┌────────────────────────────────────▼────────────────────────────────────┐
-│                        APPLICATION / STATE LAYER                        │
-│  DeviceProviders  •  SettingsProvider  •  CalibrationProvider  •  Theme │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │ (Pure Domain Models & Commands)
-┌────────────────────────────────────▼────────────────────────────────────┐
-│                              DOMAIN LAYER                               │
-│  DeviceTelemetry  •  DeviceCommand  •  DeviceSettings  •  OperatingMode │
-│  HandState        •  ConnectionState•  CalibrationState•  WireProtocol  │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │ (DeviceService Abstraction)
-┌────────────────────────────────────▼────────────────────────────────────┐
-│                    DATA & INFRASTRUCTURE LAYER                          │
-│  DeviceService (Abstract Interface)                                     │
-│  ├── MockDeviceService ────────► SimulatedEsp32 ──► SimulatedHand       │
-│  ├── BleDeviceService  ────────► ESP32 BLE GATT ──► Physical Actuator   │
-│  └── LocalSettingsRepository ──► SharedPreferences Persistence          │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Architecture Boundary Tests (`test/architecture/layer_boundaries_test.dart`)
-- **Domain Layer Isolation**: `lib/domain/` has zero dependencies on Flutter (`package:flutter/`) or outer application/infrastructure layers.
-- **Presentation Layer Isolation**: UI screens and widgets never import concrete simulation engines (`simulated_esp32.dart`, `simulated_prosthetic_hand.dart`, `mock_device_service.dart`).
-- **Application Layer Isolation**: Application controllers depend strictly on the `DeviceService` interface, with only the composition root (`device_providers.dart`) instantiating the service implementation.
-
----
-
-## 📡 Canonical Wire Protocol (§2) & BLE GATT Blueprint
-
-The canonical communication format between the mobile app and the ESP32 microcontroller is the line-oriented `KEY:VALUE` plain-text protocol defined in Spec §2, implemented in [`WireProtocol`](file:///C:/Users/ssing/OneDrive/Desktop/Project%20Files/Robotic/lib/domain/models/wire_protocol.dart).
-
-### 1. Telemetry Stream (ESP32 $\to$ Mobile App at 20 Hz)
-```text
-BATTERY:82
-POSITION:45
-EMG:127
-MODE:AUTO
-STATE:HOLDING
-```
-
-### 2. Command Set (Mobile App $\to$ ESP32)
-```text
-OPEN
-CLOSE
-STOP
-CALIBRATE
-SET_MODE:EMG
-UPDATE_LIMITS:0.0:63.0
-RESET_BATTERY
-```
-
-### 3. GATT Service & Characteristic Specifications
-
-| Identifier | UUID | Description | Property |
-|---|---|---|---|
-| **Service** | `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` | Synthera Prosthetic Service | Primary |
-| **RX Char** | `6E400002-B5A3-F393-E0A9-E50E24DCCA9E` | Command Ingest (App $\to$ ESP32) | Write Without Response |
-| **TX Char** | `6E400003-B5A3-F393-E0A9-E50E24DCCA9E` | Telemetry Stream (ESP32 $\to$ App) | Notify |
-
-### 4. Hardware Replacement Guide
-To connect to physical ESP32 hardware via BLE:
-1. Include a Flutter BLE package (`flutter_blue_plus` or `flutter_reactive_ble`).
-2. In `lib/application/providers/device_providers.dart`, replace:
-   ```dart
-   final deviceServiceProvider = Provider<DeviceService>((ref) => MockDeviceService());
-   ```
-   with:
-   ```dart
-   final deviceServiceProvider = Provider<DeviceService>((ref) => BleDeviceService(targetDeviceId: 'DAKSH-01'));
-   ```
-3. Zero modifications are needed anywhere in the UI or presentation layer.
-
----
-
-## ⚙️ Calibration & Settings Interaction Rules
-
-1. **Calibration Precedence**: Completing the 3-step calibration wizard captures physical endpoints ($0.0^\circ \to 63.0^\circ$) and persists them as the active operational limits.
-2. **Settings Synchronization**: When the operator modifies Min/Max angles in Settings, strict domain validation rules are enforced:
-   - Device Name cannot be blank.
-   - $\text{Min Angle} \ge 0.0^\circ$ and $\text{Max Angle} \le 180.0^\circ$.
-   - $\text{Min Angle} < \text{Max Angle}$ with a minimum motion stroke of $\ge 10.0^\circ$.
-   - EMG threshold within $50 - 250\ \mu\text{V}$.
-   - Battery warning threshold between $5\% - 50\%$.
-3. **State Consistency**: Saving new Settings immediately updates the simulated prosthetic actuator limits via `DeviceService.updateSettings()`, guaranteeing that invalid or inverted angle configurations are rejected before mutating device state.
-
----
-
-## 🧪 Automated Testing & Mutation Verification
-
-### Coverage Breakdown (`flutter test --coverage`)
-- **`lib/domain`**: **84.1%** (227 / 270 lines)
-- **`lib/infrastructure`**: **82.0%** (297 / 362 lines)
-- **`lib/application`**: **93.7%** (133 / 142 lines)
-- **`lib/presentation`**: **83.5%** (772 / 924 lines)
-- **Overall Code Coverage**: **84.6%** (1,479 / 1,748 total lines)
-
-### Mutation Spot-Check Verification Table
-
-| Mutation Applied | Injected Fault | Failing Test Name | Status |
-|---|---|---|:---:|
-| **1. EMG Hysteresis** | Disabled re-arm threshold check | `SimulatedEsp32 Firmware Simulation Test Suite EMG mode hysteresis prevents repeated triggers on sustained high signal` | ✅ Caught |
-| **2. STOP Cancelling AUTO** | STOP did not cancel AUTO timer | `SimulatedEsp32 Firmware Simulation Test Suite STOP command cancels Auto mode scheduling and halts motor immediately` | ✅ Caught |
-| **3. Position Clamping** | Removed angle clamp on motion step | `SimulatedProstheticHand Kinematics Test Suite Position clamping: step beyond limits is clamped and out-of-bound position is clamped on limit update` | ✅ Caught |
-| **4. Battery Lower Bound** | Allowed battery to drop $< 0.0\%$ | `SimulatedEsp32 Firmware Simulation Test Suite Battery drain prevents movement when battery reaches 0%` | ✅ Caught |
-| **5. Settings Validation** | Removed $\text{Min} < \text{Max}$ validation | `Domain Models Test Suite DeviceSettings validation rules` | ✅ Caught |
-| **6. Incomplete Calibration** | Allowed save without closed limit | `Domain Models Test Suite CalibrationState canSave validation` | ✅ Caught |
-| **7. RECONNECT No-op** | Reconnect function made no-op | `SimulatedEsp32 Firmware Simulation Test Suite Connection disconnect and reconnect sequence` | ✅ Caught |
-
----
-
-## 🎮 Evaluator Demonstration Script (§17)
-
-For the complete 3–5 minute step-by-step presentation script with exact UI actions, verbal explanations, and defect checks, see [`docs/DEMO_SCRIPT.md`](file:///C:/Users/ssing/OneDrive/Desktop/Project%20Files/Robotic/docs/DEMO_SCRIPT.md).
-
----
-
-## 🚀 Run & Download Guide
-
-### 1. Run from Source
-- **Web (Chrome / Edge)** *(Recommended, zero extra setup)*:
-  ```bash
-  flutter pub get
-  flutter run -d chrome
-  ```
-- **Windows Desktop**:
-  ```bash
-  flutter pub get
-  flutter run -d windows
-  ```
-  > **Note**: Building or running on Windows requires **Windows Developer Mode** enabled in system settings (`start ms-settings:developers`) so that Flutter can resolve C++ plugin symlinks. Running with `-d chrome` does not require Developer Mode.
-
-### 2. Serving Web Build Locally
-You can run the compiled production web bundle using Python's built-in HTTP server:
-```powershell
-# Option A: Serve build directory directly
-python -m http.server 8080 --directory build/web
-
-# Option B: Extract and serve from the release zip
-Expand-Archive -Path "dist/synthera-web.zip" -DestinationPath "dist/web" -Force
-python -m http.server 8080 --directory dist/web
-```
-Then navigate to [`http://localhost:8080`](http://localhost:8080) in your web browser.
-
-### 3. Android APK Download & Installation
-- **From GitHub Releases**: Navigate to the [Releases](https://github.com/Sumitboii/Robotic/releases) page and download `app-release.apk` attached to the latest release tag.
-- **From GitHub Actions**: Go to the **Actions** tab $\to$ select the latest **Build & Release Android APK** workflow run $\to$ download the `synthera-apk` artifact.
-- **Installing on Android (Unknown Sources)**:
-  1. Transfer or download the `.apk` file to your Android device.
-  2. Tap the `.apk` file to install. If prompted with *"For your security, your phone is not allowed to install unknown apps from this source"*:
-     - Tap **Settings** in the dialog (or navigate to **Settings > Apps > Special app access > Install unknown apps**).
-     - Select your browser / file manager and enable **Allow from this source**.
-  3. Return to the installer and tap **Install**.
-  > **Verification Status**: The Android APK is built purely in cloud CI via GitHub Actions (`.github/workflows/build-apk.yml`) and has not been tested on a physical Android device.
-
----
-
-## ⚠️ Known Limitations
-
-1. **Host Android Tooling & Cloud APK Build**: The local development machine environment lacks the Android SDK / Android Studio toolchain (`ANDROID_HOME`), preventing direct native APK builds on this specific host machine (`flutter doctor` confirms "Unable to locate Android SDK"). Android APK compilation is automated via cloud CI (`.github/workflows/build-apk.yml`) and has not been tested on a physical Android device.
-2. **Windows Desktop Symlink Requirement**: Building or running the native Windows desktop executable (`flutter run -d windows` / `flutter build windows`) requires Windows Developer Mode to be enabled in system settings (`start ms-settings:developers`) to support plugin symlink creation.
-3. **Hardware BLE Peripheral**: `BleDeviceService` is an architectural blueprint implementing the `DeviceService` contract with defined GATT UUIDs and canonical `KEY:VALUE` wire protocol serialization; it has not been tested against a physical ESP32 breadboard peripheral.
-
----
-
-## 📄 License
-This project is licensed under the MIT License.
+- **Physical BLE Hardware**: BLE GATT integration is implemented and unit-tested architecturally (`BleDeviceService`), but was not verified on a physical ESP32 microcontroller in this testing environment.
+- **Android Target**: Android runtime verification was performed via unit, widget, and responsive viewport tests; the Android APK build was not executed locally due to the absence of the Android SDK on the host machine.
+- **Headless Host Environment**: Desktop and Web execution verification were conducted via automated test harnesses and headless release bundle compilation.

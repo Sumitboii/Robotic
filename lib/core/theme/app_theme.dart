@@ -52,7 +52,7 @@ class AppTheme {
       colorScheme: colorScheme,
       fontFamily: AppTypography.uiFontFamily,
       fontFamilyFallback: AppTypography.uiFontFallbacks,
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.darkSurface,
         elevation: 0,
         margin: EdgeInsets.zero,
@@ -174,7 +174,7 @@ class AppTheme {
       colorScheme: colorScheme,
       fontFamily: AppTypography.uiFontFamily,
       fontFamilyFallback: AppTypography.uiFontFallbacks,
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.lightSurface,
         elevation: 0,
         margin: EdgeInsets.zero,

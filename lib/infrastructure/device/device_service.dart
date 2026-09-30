@@ -6,7 +6,7 @@ import '../../domain/models/device_settings.dart';
 import '../../domain/models/device_telemetry.dart';
 import '../../domain/models/operating_mode.dart';
 
-/// Abstract Device Service interface.
+/// Abstract Device Service interface (Assignment §4 & §11).
 /// Decouples UI and application state from the concrete communication implementation.
 /// Conceptually swappable between [MockDeviceService] (Simulator) and [BleDeviceService] (Real ESP32).
 abstract class DeviceService {
@@ -37,6 +37,9 @@ abstract class DeviceService {
   /// Send a high-level command (OPEN, CLOSE, STOP, etc.)
   Future<void> sendCommand(DeviceCommand command);
 
+  /// Send a raw wire protocol command string (for error and fuzz testing §10)
+  Future<void> sendRawCommand(String rawCommand);
+
   /// Quick command shortcuts
   Future<void> openHand();
   Future<void> closeHand();
@@ -48,17 +51,21 @@ abstract class DeviceService {
   /// Update hardware settings and motion limits
   Future<void> updateSettings(DeviceSettings settings);
 
-  /// Calibration workflow methods
+  /// Calibration workflow methods (§9)
   Future<void> startCalibration();
   Future<double> captureCalibrationOpenPosition();
   Future<double> captureCalibrationClosePosition();
   Future<void> saveCalibrationLimits(double minAngle, double maxAngle);
   Future<void> cancelCalibration();
 
-  /// Developer / Demo controls for presentation
+  /// Developer / Demo controls for presentation (§10)
   Future<void> triggerDemoBatteryDrain(double targetPercentage);
   Future<void> triggerEmgSpike(double spikeValue);
   Future<void> simulateConnectionDrop();
+  Future<void> toggleEmgSensorFault([bool? enable]);
+  Future<void> setFailNextReconnect(bool fail);
+  bool get isEmgSensorFaultSimulated;
+  bool get willFailNextReconnect;
 
   /// Release resources and timers
   void dispose();

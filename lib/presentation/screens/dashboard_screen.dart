@@ -4,6 +4,8 @@ import '../../application/providers/device_providers.dart';
 import '../../application/providers/settings_provider.dart';
 import '../../application/providers/theme_provider.dart';
 import '../../core/theme/app_theme.dart';
+import '../../domain/models/device_log_entry.dart';
+import '../../domain/models/operating_mode.dart';
 import '../widgets/battery_indicator.dart';
 import '../widgets/common/metric_tile.dart';
 import '../widgets/connection_banner.dart';
@@ -14,11 +16,18 @@ import '../widgets/hand_visualizer.dart';
 import '../widgets/mode_selector.dart';
 import '../widgets/quick_demo_panel.dart';
 
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  String? _dismissedError;
+
+  @override
+  Widget build(BuildContext context) {
     final deviceService = ref.watch(deviceServiceProvider);
     final telemetryAsync = ref.watch(telemetryStreamProvider);
     final connectionAsync = ref.watch(connectionStateStreamProvider);
@@ -38,6 +47,18 @@ class DashboardScreen extends ConsumerWidget {
     final maxAngle = settings?.maxAngle ?? 63.0;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isLowBattery = telemetry.batteryPercentage <= batteryWarning;
+
+    // Check for recent rejected command in logs
+    final recentErrorLog = logs.isNotEmpty &&
+            logs.first.level == LogLevel.error &&
+            logs.first.message.contains('ERR:INVALID_COMMAND')
+        ? logs.first.message
+        : null;
+
+    final activeError = telemetry.lastError ?? recentErrorLog;
+    final showErrorBanner =
+        activeError != null && activeError != _dismissedError;
 
     return Scaffold(
       appBar: AppBar(
@@ -170,104 +191,151 @@ class DashboardScreen extends ConsumerWidget {
                   constraints: const BoxConstraints(maxWidth: 1200),
                   child: SingleChildScrollView(
                     padding: AppSpacing.edgeInsetsScreenWide,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Left Pane: Hero Visualizer & Actuator Controls
-                        Expanded(
-                          flex: 5,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              HandVisualizer(
-                                currentAngle: telemetry.positionDegrees,
-                                minAngle: minAngle,
-                                maxAngle: maxAngle,
-                                handState: telemetry.handState,
-                                height: 320,
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              ModeSelector(
-                                currentMode: telemetry.operatingMode,
-                                isConnected: connectionState.isConnected,
-                                onModeChanged: (mode) =>
-                                    deviceService.setOperatingMode(mode),
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              ControlPanel(
-                                handState: telemetry.handState,
-                                isConnected: connectionState.isConnected,
-                                isBatteryDepleted:
-                                    telemetry.batteryPercentage <= 0.0,
-                                onOpen: () => deviceService.openHand(),
-                                onClose: () => deviceService.closeHand(),
-                                onStop: () => deviceService.emergencyStop(),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.xl),
+                        // Prominent Low Battery Banner (§10)
+                        if (isLowBattery) ...[
+                          _buildLowBatteryBanner(telemetry.batteryPercentage),
+                          const SizedBox(height: AppSpacing.md),
+                        ],
 
-                        // Right Pane: Telemetry Readouts & EMG Graph
-                        Expanded(
-                          flex: 5,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              ConnectionBanner(
-                                deviceName: telemetry.deviceName,
-                                connectionState: connectionState,
-                                onReconnect: () => deviceService.reconnect(),
-                                onDisconnect: () => deviceService.disconnect(),
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              Row(
+                        // Invalid Command Error Alert (§10)
+                        if (showErrorBanner) ...[
+                          _buildInvalidCommandAlert(activeError),
+                          const SizedBox(height: AppSpacing.md),
+                        ],
+
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Left Pane: Hero Visualizer & Actuator Controls
+                            Expanded(
+                              flex: 5,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Expanded(
-                                    child: BatteryIndicator(
-                                      batteryPercentage:
-                                          telemetry.batteryPercentage,
-                                      warningThreshold: batteryWarning,
-                                      isLowBattery: telemetry.isLowBattery,
-                                    ),
+                                  HandVisualizer(
+                                    currentAngle: telemetry.positionDegrees,
+                                    minAngle: minAngle,
+                                    maxAngle: maxAngle,
+                                    handState: telemetry.handState,
+                                    height: 320,
                                   ),
-                                  const SizedBox(width: AppSpacing.md),
-                                  Expanded(
-                                    child: MetricTile(
-                                      label: 'EMG SENSOR',
-                                      value:
-                                          telemetry.emgValue.toStringAsFixed(0),
-                                      unit: 'μV',
-                                      icon: Icons.sensors,
-                                      accentColor:
-                                          telemetry.emgValue >= emgThreshold
-                                              ? AppColors.dangerDark
-                                              : (isDark
-                                                  ? AppColors.primaryDark
-                                                  : AppColors.primaryLight),
-                                      progress: (telemetry.emgValue / 250.0)
-                                          .clamp(0.0, 1.0),
-                                      progressColor:
-                                          telemetry.emgValue >= emgThreshold
-                                              ? AppColors.dangerDark
-                                              : null,
-                                      helperText:
-                                          telemetry.emgValue >= emgThreshold
-                                              ? 'ACTIVE'
-                                              : 'IDLE',
-                                    ),
+                                  const SizedBox(height: AppSpacing.md),
+                                  ModeSelector(
+                                    currentMode: telemetry.operatingMode,
+                                    isConnected: connectionState.isConnected,
+                                    onModeChanged: (mode) =>
+                                        deviceService.setOperatingMode(mode),
+                                  ),
+                                  if (telemetry.operatingMode ==
+                                          OperatingMode.emg &&
+                                      !telemetry.isEmgSensorAvailable) ...[
+                                    const SizedBox(height: AppSpacing.xs),
+                                    _buildEmgSensorOfflineNote(),
+                                  ],
+                                  const SizedBox(height: AppSpacing.md),
+                                  ControlPanel(
+                                    handState: telemetry.handState,
+                                    isConnected: connectionState.isConnected,
+                                    isBatteryDepleted:
+                                        telemetry.batteryPercentage <= 0.0,
+                                    onOpen: () => deviceService.openHand(),
+                                    onClose: () => deviceService.closeHand(),
+                                    onStop: () => deviceService.emergencyStop(),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: AppSpacing.md),
-                              EmgGraph(
-                                emgHistory: emgHistory,
-                                emgThreshold: emgThreshold,
-                                currentEmg: telemetry.emgValue,
-                                height: 200,
+                            ),
+                            const SizedBox(width: AppSpacing.xl),
+
+                            // Right Pane: Telemetry Readouts & EMG Graph
+                            Expanded(
+                              flex: 5,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  ConnectionBanner(
+                                    deviceName: settings?.deviceName ??
+                                        telemetry.deviceName,
+                                    connectionState: connectionState,
+                                    onReconnect: () =>
+                                        deviceService.reconnect(),
+                                    onDisconnect: () =>
+                                        deviceService.disconnect(),
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: BatteryIndicator(
+                                          batteryPercentage:
+                                              telemetry.batteryPercentage,
+                                          warningThreshold: batteryWarning,
+                                          isLowBattery: isLowBattery,
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppSpacing.md),
+                                      Expanded(
+                                        child: MetricTile(
+                                          label: 'EMG SENSOR',
+                                          value: telemetry.isEmgSensorAvailable
+                                              ? telemetry.emgValue
+                                                  .toStringAsFixed(0)
+                                              : 'N/A',
+                                          unit: telemetry.isEmgSensorAvailable
+                                              ? 'μV'
+                                              : '',
+                                          icon: telemetry.isEmgSensorAvailable
+                                              ? Icons.sensors
+                                              : Icons.sensors_off,
+                                          accentColor: !telemetry
+                                                  .isEmgSensorAvailable
+                                              ? AppColors.emergencyRed
+                                              : (telemetry.emgValue >=
+                                                      emgThreshold
+                                                  ? AppColors.dangerDark
+                                                  : (isDark
+                                                      ? AppColors.primaryDark
+                                                      : AppColors
+                                                          .primaryLight)),
+                                          progress:
+                                              telemetry.isEmgSensorAvailable
+                                                  ? (telemetry.emgValue / 250.0)
+                                                      .clamp(0.0, 1.0)
+                                                  : 0.0,
+                                          progressColor:
+                                              !telemetry.isEmgSensorAvailable
+                                                  ? AppColors.emergencyRed
+                                                  : (telemetry.emgValue >=
+                                                          emgThreshold
+                                                      ? AppColors.dangerDark
+                                                      : null),
+                                          helperText:
+                                              !telemetry.isEmgSensorAvailable
+                                                  ? 'UNAVAILABLE'
+                                                  : (telemetry.emgValue >=
+                                                          emgThreshold
+                                                      ? 'ACTIVE'
+                                                      : 'IDLE'),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
+                                  EmgGraph(
+                                    emgHistory: emgHistory,
+                                    emgThreshold: emgThreshold,
+                                    currentEmg: telemetry.emgValue,
+                                    isSensorAvailable:
+                                        telemetry.isEmgSensorAvailable,
+                                    height: 200,
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -282,9 +350,22 @@ class DashboardScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Prominent Low Battery Banner (§10)
+                  if (isLowBattery) ...[
+                    _buildLowBatteryBanner(telemetry.batteryPercentage),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+
+                  // Invalid Command Error Alert (§10)
+                  if (showErrorBanner) ...[
+                    _buildInvalidCommandAlert(activeError),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+
                   // 1. Connection Status Banner
                   ConnectionBanner(
-                    deviceName: telemetry.deviceName,
+                    deviceName:
+                        settings?.deviceName ?? telemetry.deviceName,
                     connectionState: connectionState,
                     onReconnect: () => deviceService.reconnect(),
                     onDisconnect: () => deviceService.disconnect(),
@@ -308,29 +389,40 @@ class DashboardScreen extends ConsumerWidget {
                         child: BatteryIndicator(
                           batteryPercentage: telemetry.batteryPercentage,
                           warningThreshold: batteryWarning,
-                          isLowBattery: telemetry.isLowBattery,
+                          isLowBattery: isLowBattery,
                         ),
                       ),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: MetricTile(
                           label: 'EMG SENSOR',
-                          value: telemetry.emgValue.toStringAsFixed(0),
-                          unit: 'μV',
-                          icon: Icons.sensors,
-                          accentColor: telemetry.emgValue >= emgThreshold
-                              ? AppColors.dangerDark
-                              : (isDark
-                                  ? AppColors.primaryDark
-                                  : AppColors.primaryLight),
-                          progress:
-                              (telemetry.emgValue / 250.0).clamp(0.0, 1.0),
-                          progressColor: telemetry.emgValue >= emgThreshold
-                              ? AppColors.dangerDark
-                              : null,
-                          helperText: telemetry.emgValue >= emgThreshold
-                              ? 'ACTIVE'
-                              : 'IDLE',
+                          value: telemetry.isEmgSensorAvailable
+                              ? telemetry.emgValue.toStringAsFixed(0)
+                              : 'N/A',
+                          unit: telemetry.isEmgSensorAvailable ? 'μV' : '',
+                          icon: telemetry.isEmgSensorAvailable
+                              ? Icons.sensors
+                              : Icons.sensors_off,
+                          accentColor: !telemetry.isEmgSensorAvailable
+                              ? AppColors.emergencyRed
+                              : (telemetry.emgValue >= emgThreshold
+                                  ? AppColors.dangerDark
+                                  : (isDark
+                                      ? AppColors.primaryDark
+                                      : AppColors.primaryLight)),
+                          progress: telemetry.isEmgSensorAvailable
+                              ? (telemetry.emgValue / 250.0).clamp(0.0, 1.0)
+                              : 0.0,
+                          progressColor: !telemetry.isEmgSensorAvailable
+                              ? AppColors.emergencyRed
+                              : (telemetry.emgValue >= emgThreshold
+                                  ? AppColors.dangerDark
+                                  : null),
+                          helperText: !telemetry.isEmgSensorAvailable
+                              ? 'UNAVAILABLE'
+                              : (telemetry.emgValue >= emgThreshold
+                                  ? 'ACTIVE'
+                                  : 'IDLE'),
                         ),
                       ),
                     ],
@@ -342,6 +434,7 @@ class DashboardScreen extends ConsumerWidget {
                     emgHistory: emgHistory,
                     emgThreshold: emgThreshold,
                     currentEmg: telemetry.emgValue,
+                    isSensorAvailable: telemetry.isEmgSensorAvailable,
                     height: 155,
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -353,6 +446,11 @@ class DashboardScreen extends ConsumerWidget {
                     onModeChanged: (mode) =>
                         deviceService.setOperatingMode(mode),
                   ),
+                  if (telemetry.operatingMode == OperatingMode.emg &&
+                      !telemetry.isEmgSensorAvailable) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    _buildEmgSensorOfflineNote(),
+                  ],
                   const SizedBox(height: AppSpacing.md),
 
                   // 6. Actuator Controls (OPEN / CLOSE / STOP)
@@ -370,6 +468,111 @@ class DashboardScreen extends ConsumerWidget {
             );
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildLowBatteryBanner(double percentage) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm + 2,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.emergencyRed.withAlpha(35),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.emergencyRed, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: AppColors.emergencyRed, size: 20),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              '⚠ LOW BATTERY  Battery: ${percentage.toStringAsFixed(0)}%',
+              style: const TextStyle(
+                fontFamily: AppTypography.monoFontFamily,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                color: AppColors.emergencyRed,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInvalidCommandAlert(String message) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.emergencyRed.withAlpha(25),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.emergencyRed),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline,
+              color: AppColors.emergencyRed, size: 18),
+          const SizedBox(width: AppSpacing.sm),
+          const Expanded(
+            child: Text(
+              'Invalid command rejected by device',
+              style: TextStyle(
+                color: AppColors.emergencyRed,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close,
+                size: 16, color: AppColors.emergencyRed),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: () {
+              setState(() {
+                _dismissedError = message;
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmgSensorOfflineNote() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs + 2,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.emergencyRed.withAlpha(20),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.emergencyRed.withAlpha(120)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.sensors_off, size: 14, color: AppColors.emergencyRed),
+          SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              'EMG mode paused: Sensor unavailable or disconnected',
+              style: TextStyle(
+                color: AppColors.emergencyRed,
+                fontSize: 10.5,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
