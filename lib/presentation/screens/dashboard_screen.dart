@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../application/providers/app_update_provider.dart';
 import '../../application/providers/device_providers.dart';
 import '../../application/providers/settings_provider.dart';
 import '../../application/providers/theme_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/models/device_log_entry.dart';
 import '../../domain/models/operating_mode.dart';
+import '../widgets/app_update_dialog.dart';
 import '../widgets/assignment_telemetry_card.dart';
 import '../widgets/battery_indicator.dart';
 import '../widgets/common/metric_tile.dart';
@@ -37,6 +39,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final settingsAsync = ref.watch(settingsNotifierProvider);
     final logs = ref.watch(deviceLogsProvider);
     final currentThemeMode = ref.watch(themeModeProvider);
+    final updateInfo = ref.watch(appUpdateProvider);
 
     final telemetry = telemetryAsync.value ?? deviceService.currentTelemetry;
     final connectionState =
@@ -63,6 +66,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         activeError != null && activeError != _dismissedError;
 
     return Scaffold(
+      floatingActionButton: updateInfo.isUpdateAvailable && !updateInfo.isInstalled
+          ? FloatingActionButton.extended(
+              backgroundColor:
+                  isDark ? AppColors.primaryDark : AppColors.primaryLight,
+              foregroundColor: Colors.black,
+              icon: const Icon(Icons.system_update, size: 18),
+              label: const Text(
+                'UPDATE APP (v1.3.1)',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+              onPressed: () => showAppUpdateDialog(context),
+            )
+          : null,
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -161,35 +177,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           // System Updates & OTA Button
           IconButton(
-            tooltip: 'System & App Updates',
+            tooltip: updateInfo.isUpdateAvailable ? 'Update Available: v${updateInfo.latestVersion}' : 'System & App Updates',
             icon: Stack(
               clipBehavior: Clip.none,
               children: [
                 Icon(
-                  Icons.system_update_alt,
-                  color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                  updateInfo.isInstalled ? Icons.verified : Icons.system_update_alt,
+                  color: updateInfo.isInstalled
+                      ? AppColors.successDark
+                      : (isDark ? AppColors.primaryDark : AppColors.primaryLight),
                 ),
-                Positioned(
-                  right: -2,
-                  top: -2,
-                  child: Container(
-                    width: 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
-                      shape: BoxShape.circle,
+                if (updateInfo.isUpdateAvailable && !updateInfo.isInstalled)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.greenAccent,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => const SystemUpdateSheet(),
-              );
+              showAppUpdateDialog(context);
             },
           ),
           // Device Logs Button
@@ -229,6 +243,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // In-App Update Available / Installed Banner
+                        _buildAppUpdateBanner(context, updateInfo, isDark),
+
                         // Prominent Low Battery Banner (§10)
                         if (isLowBattery) ...[
                           _buildLowBatteryBanner(telemetry.batteryPercentage),
@@ -390,6 +407,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // In-App Update Available / Installed Banner
+                  _buildAppUpdateBanner(context, updateInfo, isDark),
+
                   // Prominent Low Battery Banner (§10)
                   if (isLowBattery) ...[
                     _buildLowBatteryBanner(telemetry.batteryPercentage),
@@ -616,6 +636,117 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 fontSize: 10.5,
                 fontWeight: FontWeight.bold,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppUpdateBanner(
+    BuildContext context,
+    AppUpdateInfo updateInfo,
+    bool isDark,
+  ) {
+    if (updateInfo.isBannerDismissed) return const SizedBox.shrink();
+
+    final isInstalled = updateInfo.isInstalled;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: isInstalled
+            ? (isDark ? const Color(0xFF0F291E) : const Color(0xFFE6F4EA))
+            : (isDark ? const Color(0xFF142436) : const Color(0xFFE8F0FE)),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: isInstalled
+              ? AppColors.successDark.withAlpha(140)
+              : (isDark ? AppColors.primaryDark : AppColors.primaryLight)
+                  .withAlpha(120),
+          width: 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isInstalled ? Icons.verified : Icons.system_update,
+                color: isInstalled
+                    ? AppColors.successDark
+                    : (isDark ? AppColors.primaryDark : AppColors.primaryLight),
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  isInstalled
+                      ? 'UPDATE v1.3.1 ACTIVE'
+                      : 'UPDATE v${updateInfo.latestVersion} AVAILABLE',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontFamily: AppTypography.monoFontFamily,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.3,
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isInstalled
+                      ? AppColors.successDark
+                      : (isDark ? AppColors.primaryDark : AppColors.primaryLight),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  textStyle: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () {
+                  showAppUpdateDialog(context);
+                },
+                child: Text(
+                  isInstalled
+                      ? 'CHANGES'
+                      : (updateInfo.isUpdating ? 'UPDATING...' : 'UPDATE NOW'),
+                ),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(Icons.close, size: 14),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Dismiss',
+                onPressed: () =>
+                    ref.read(appUpdateProvider.notifier).dismissBanner(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            isInstalled
+                ? 'Titanium bionic kinematics & Section 2 telemetry card active.'
+                : 'Titanium bionic kinematics, Section 2 telemetry & font fixes ready.',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 9.5,
+              color: isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.lightTextSecondary,
             ),
           ),
         ],
