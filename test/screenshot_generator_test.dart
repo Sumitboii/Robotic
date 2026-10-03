@@ -11,6 +11,7 @@ import 'package:synthera_prosthetic_hand/application/providers/theme_provider.da
 import 'package:synthera_prosthetic_hand/domain/models/device_settings.dart';
 import 'package:synthera_prosthetic_hand/domain/models/operating_mode.dart';
 import 'package:synthera_prosthetic_hand/infrastructure/device/mock/mock_device_service.dart';
+import 'helpers/test_font_loader.dart';
 
 class CustomThemeNotifier extends ThemeModeNotifier {
   CustomThemeNotifier(ThemeMode initial) : super() {
@@ -39,8 +40,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Screenshot Generation Suite (Golden Rendering)', () {
-    setUp(() {
+    setUp(() async {
       SharedPreferences.setMockInitialValues({});
+      await loadTestFonts();
     });
 
     testWidgets('Generate all documentation and multi-device screenshots',

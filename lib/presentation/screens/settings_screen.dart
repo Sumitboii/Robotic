@@ -10,6 +10,7 @@ import '../widgets/common/app_card.dart';
 import '../widgets/common/danger_button.dart';
 import '../widgets/common/primary_button.dart';
 import '../widgets/common/section_header.dart';
+import '../widgets/system_update_sheet.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -332,9 +333,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               keyboardType: TextInputType.number,
                               decoration: InputDecoration(
                                 labelText: 'EMG Contraction Trigger Threshold',
-                                suffixText: 'μV',
+                                suffixText: 'uV',
                                 helperText:
-                                    'Recommended clinical range: 100 - 180 μV',
+                                    'Recommended clinical range: 100 - 180 uV',
                                 prefixIcon: Icon(
                                   Icons.sensors,
                                   color: isDark
@@ -463,9 +464,64 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ],
                         ),
                       ),
+                      // 6. System & App Updates Card (§17 OTA & Direct App Update)
+                      AppCard(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionHeader(
+                              title: 'SYSTEM & APP UPDATES',
+                              subtitle:
+                                  'Install latest mobile APK, PWA updates & ESP32 firmware OTA (§17)',
+                              icon: Icons.system_update_alt,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    icon: const Icon(Icons.download, size: 16),
+                                    label: const Text('Direct APK Download'),
+                                    onPressed: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (_) => const SystemUpdateSheet(),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: isDark
+                                          ? AppColors.primaryDark
+                                          : AppColors.primaryLight,
+                                      foregroundColor: Colors.black,
+                                    ),
+                                    icon: const Icon(Icons.bolt, size: 16),
+                                    label: const Text('ESP32 OTA Flash'),
+                                    onPressed: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (_) => const SystemUpdateSheet(),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: AppSpacing.lg),
 
-                      // 6. Danger Zone Card
+                      // 7. Danger Zone Card
                       AppCard(
                         padding: const EdgeInsets.all(AppSpacing.lg),
                         borderColor: AppColors.emergencyRed.withAlpha(120),

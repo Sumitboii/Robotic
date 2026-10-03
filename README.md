@@ -14,10 +14,12 @@ This application serves as an operator console and digital twin for the Synthera
 
 ---
 
-## 2. Live Demos
+## 2. Live Demos & Mobile Installation
 
+- **Direct Android APK Download**: [Download app-release.apk (v1.0.1)](https://github.com/Sumitboii/Robotic/releases/download/v1.0.1/app-release.apk)
 - **Hosted Standard Web App**: [https://sumitboii.github.io/Robotic/](https://sumitboii.github.io/Robotic/)
 - **Hosted iPhone 18 Phone-Frame Preview**: [https://sumitboii.github.io/Robotic/phone/](https://sumitboii.github.io/Robotic/phone/)
+- **iOS (iPhone) Instant Install**: Open [https://sumitboii.github.io/Robotic/](https://sumitboii.github.io/Robotic/) in Safari $\to$ Tap **Share** $\to$ **"Add to Home Screen"** for full-screen standalone app mode.
 - **Local Standard App**: Run `python -m http.server 8080 --directory build/web` and navigate to `http://localhost:8080`.
 - **Local Phone-Frame Preview**: Run `python -m http.server 8082 --directory build/web_phone` and navigate to `http://localhost:8082`.
 
@@ -148,14 +150,27 @@ flutter run -d chrome -t lib/main_phone.dart
 flutter run -d windows
 ```
 
-### Open on Your Real Phone
-1. **Via GitHub Pages**: Open [https://sumitboii.github.io/Robotic/](https://sumitboii.github.io/Robotic/) directly in Safari (iOS) or Chrome (Android). On viewports $< 500\,\text{pt}$, the application automatically detects mobile screen dimensions and renders full-screen natively without desktop borders.
-2. **Via Local Wi-Fi Network**:
-   ```bash
-   python -m http.server 8090 --bind 0.0.0.0 --directory build/web
-   ```
-   Open `http://<YOUR-PC-IP>:8090` on your smartphone connected to the same Wi-Fi.
-3. **PWA Home Screen Installation**: Tap "Share" $\to$ "Add to Home Screen" on iOS Safari or "Install App" in Android Chrome for a native full-screen standalone experience.
+### Open & Install on Your Real Phone
+
+#### Android Devices (Direct APK)
+1. **Download APK**: [Download app-release.apk](https://github.com/Sumitboii/Robotic/releases/download/v1.0.1/app-release.apk) (local file: [`dist/synthera-prosthetic-hand.apk`](dist/synthera-prosthetic-hand.apk)).
+2. Tap the downloaded file in your notification drawer or **Downloads** folder.
+3. Tap **Install** (toggle "Allow from this source" if prompted by Chrome/Files).
+4. Launch **Synthera** directly from your app drawer.
+
+#### iOS Devices (iPhone PWA Standalone)
+1. Open **Safari** on your iPhone.
+2. Go to: [https://sumitboii.github.io/Robotic/](https://sumitboii.github.io/Robotic/)
+3. Tap the **Share** button (the square with an upward arrow).
+4. Scroll down and tap **"Add to Home Screen"**.
+5. Tap **Add** in the top-right corner.
+6. The **Synthera** app icon appears on your home screen and launches full-screen without browser URL bars!
+
+#### Local Wi-Fi Network Streaming
+```bash
+python -m http.server 8090 --bind 0.0.0.0 --directory build/web
+```
+Open `http://<YOUR-PC-IP>:8090` on any phone connected to the same Wi-Fi network.
 
 For complete test suite details and mutation test documentation, see [docs/TESTING.md](docs/TESTING.md).
 

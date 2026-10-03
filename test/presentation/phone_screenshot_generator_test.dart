@@ -14,6 +14,7 @@ import 'package:synthera_prosthetic_hand/domain/models/operating_mode.dart';
 import 'package:synthera_prosthetic_hand/infrastructure/device/mock/mock_device_service.dart';
 import 'package:synthera_prosthetic_hand/presentation/preview/phone_frame.dart';
 import 'package:synthera_prosthetic_hand/presentation/widgets/hand_visualizer.dart';
+import '../helpers/test_font_loader.dart';
 
 class CustomThemeNotifier extends ThemeModeNotifier {
   CustomThemeNotifier(ThemeMode initial) : super() {
@@ -42,8 +43,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Phase 8 Phone Frame & Robotic Hand Screenshot Generation', () {
-    setUp(() {
+    setUp(() async {
       SharedPreferences.setMockInitialValues({});
+      await loadTestFonts();
     });
 
     // ═══════════════════════════════════════════════════════

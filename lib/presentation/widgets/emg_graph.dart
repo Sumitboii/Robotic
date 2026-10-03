@@ -94,7 +94,7 @@ class EmgGraph extends StatelessWidget {
                     const SizedBox(width: AppSpacing.xs + 2),
                     Text(
                       isSensorAvailable
-                          ? '${currentEmg.toStringAsFixed(0)} μV'
+                          ? '${currentEmg.toStringAsFixed(0)} uV'
                           : 'N/A',
                       style: AppTypography.monoValueMedium(color: primaryColor),
                     ),
@@ -242,7 +242,7 @@ class _ClinicalEmgWaveformPainter extends CustomPainter {
     // Threshold baseline text callout
     final textPainter = TextPainter(
       text: TextSpan(
-        text: 'TH: ${threshold.toStringAsFixed(0)} μV',
+        text: 'TH: ${threshold.toStringAsFixed(0)} uV',
         style: TextStyle(
           fontFamily: AppTypography.monoFontFamily,
           fontFamilyFallback: AppTypography.monoFontFallbacks,

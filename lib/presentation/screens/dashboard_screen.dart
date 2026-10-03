@@ -6,6 +6,7 @@ import '../../application/providers/theme_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/models/device_log_entry.dart';
 import '../../domain/models/operating_mode.dart';
+import '../widgets/assignment_telemetry_card.dart';
 import '../widgets/battery_indicator.dart';
 import '../widgets/common/metric_tile.dart';
 import '../widgets/connection_banner.dart';
@@ -15,6 +16,7 @@ import '../widgets/emg_graph.dart';
 import '../widgets/hand_visualizer.dart';
 import '../widgets/mode_selector.dart';
 import '../widgets/quick_demo_panel.dart';
+import '../widgets/system_update_sheet.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -157,6 +159,39 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               );
             },
           ),
+          // System Updates & OTA Button
+          IconButton(
+            tooltip: 'System & App Updates',
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  Icons.system_update_alt,
+                  color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                ),
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => const SystemUpdateSheet(),
+              );
+            },
+          ),
           // Device Logs Button
           IconButton(
             tooltip: 'Device Logs',
@@ -266,6 +301,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                         deviceService.disconnect(),
                                   ),
                                   const SizedBox(height: AppSpacing.md),
+                                  AssignmentTelemetryCard(
+                                    telemetry: telemetry,
+                                    connectionState: connectionState,
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
                                   Row(
                                     children: [
                                       Expanded(
@@ -285,7 +325,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                                   .toStringAsFixed(0)
                                               : 'N/A',
                                           unit: telemetry.isEmgSensorAvailable
-                                              ? 'μV'
+                                              ? 'uV'
                                               : '',
                                           icon: telemetry.isEmgSensorAvailable
                                               ? Icons.sensors
@@ -371,6 +411,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                   const SizedBox(height: AppSpacing.md),
 
+                  // Specification §2 Core Telemetry Grid
+                  AssignmentTelemetryCard(
+                    telemetry: telemetry,
+                    connectionState: connectionState,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
                   // 2. Hand Visualization (Custom Kinematics)
                   HandVisualizer(
                     currentAngle: telemetry.positionDegrees,
@@ -398,7 +445,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           value: telemetry.isEmgSensorAvailable
                               ? telemetry.emgValue.toStringAsFixed(0)
                               : 'N/A',
-                          unit: telemetry.isEmgSensorAvailable ? 'μV' : '',
+                          unit: telemetry.isEmgSensorAvailable ? 'uV' : '',
                           icon: telemetry.isEmgSensorAvailable
                               ? Icons.sensors
                               : Icons.sensors_off,

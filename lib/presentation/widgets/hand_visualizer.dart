@@ -1,12 +1,27 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/app_typography.dart';
 import '../../domain/models/hand_state.dart';
 import 'common/status_chip.dart';
 
 /// Pure mathematical kinematics model for the robotic hand joints.
 class HandPose {
   final double closure; // 0.0 (fully open) to 1.0 (fully closed)
+
+  // Thumb articulation
+  final double thumbOpposition; // 0.0 to 1.0 across palm
+  final double thumbFlexion; // 0.0 to 1.0 curl
+
+  // Finger articulation fractions (0.0 = extended, 1.0 = fully curled into fist)
+  final double indexFlexion;
+  final double middleFlexion;
+  final double ringFlexion;
+  final double pinkyFlexion;
+
+  // Joint angles for backward compatibility and test verification
   final double thumbBaseAngle;
   final double thumbPipAngle;
   final double thumbDipAngle;
@@ -29,6 +44,12 @@ class HandPose {
 
   const HandPose({
     required this.closure,
+    required this.thumbOpposition,
+    required this.thumbFlexion,
+    required this.indexFlexion,
+    required this.middleFlexion,
+    required this.ringFlexion,
+    required this.pinkyFlexion,
     required this.thumbBaseAngle,
     required this.thumbPipAngle,
     required this.thumbDipAngle,
@@ -55,28 +76,33 @@ class HandPose {
     final range = maxAngle - minAngle;
     final t = range <= 0.0 ? 0.0 : ((angle - minAngle) / range).clamp(0.0, 1.0);
 
-    // Staggered easing for organic mechanical motion:
+    // Staggered organic mechanical motion profiles:
     // - Thumb leads slightly (closes first for grip positioning)
     // - Index & Middle follow nominal path
     // - Ring & Pinky lag slightly (power grip conform)
-    final tThumb = (t * 1.12).clamp(0.0, 1.0);
+    final tThumb = (t * 1.15).clamp(0.0, 1.0);
     final tIndex = t;
-    final tMiddle = (t * 1.02).clamp(0.0, 1.0);
-    final tRing = (t < 0.05 ? 0.0 : (t - 0.05) / 0.95).clamp(0.0, 1.0);
-    final tPinky = (t < 0.09 ? 0.0 : (t - 0.09) / 0.91).clamp(0.0, 1.0);
+    final tMiddle = (t * 1.03).clamp(0.0, 1.0);
+    final tRing = (t < 0.04 ? 0.0 : (t - 0.04) / 0.96).clamp(0.0, 1.0);
+    final tPinky = (t < 0.08 ? 0.0 : (t - 0.08) / 0.92).clamp(0.0, 1.0);
 
-    // Coupling parameters: MCP up to 80°, PIP up to 100°, DIP ~ 0.7 * PIP
+    // Joint angle calculations for tests
     double computeMcp(double fraction) => fraction * 78.0;
     double computePip(double fraction) => fraction * 98.0;
     double computeDip(double fraction) => fraction * 68.6;
 
-    // Thumb opposition kinematics (angled base opposition + 2 flexion joints)
-    final thumbBase = tThumb * 42.0; // Opposes across palm
+    final thumbBase = tThumb * 42.0;
     final thumbPip = tThumb * 55.0;
     final thumbDip = tThumb * 48.0;
 
     return HandPose(
       closure: t,
+      thumbOpposition: tThumb,
+      thumbFlexion: tThumb,
+      indexFlexion: tIndex,
+      middleFlexion: tMiddle,
+      ringFlexion: tRing,
+      pinkyFlexion: tPinky,
       thumbBaseAngle: thumbBase,
       thumbPipAngle: thumbPip,
       thumbDipAngle: thumbDip,
@@ -98,9 +124,10 @@ class HandPose {
 
 /// Realistic High-End Vector Robotic Prosthetic Hand Visualizer.
 ///
-/// Features engineered matte carbon-fiber & titanium segments, beveled palm panels,
-/// visible hinge joint caps, tendon tension lines, servo housing bulges,
-/// status LED ring, and continuous 60fps kinematic motion interpolation.
+/// Features authentic aerospace titanium and carbon-fiber materials,
+/// true 2.5D perspective foreshortening grip flexion, multi-linkage phalanges,
+/// high-friction silicone grip pads, thenar/hypothenar actuator chambers,
+/// and live mechanical status indicators.
 class HandVisualizer extends StatefulWidget {
   final double currentAngle;
   final double minAngle;
@@ -348,7 +375,7 @@ class _HandVisualizerState extends State<HandVisualizer>
   }
 }
 
-/// Vector Painter rendering a photorealistic engineered robotic prosthetic hand.
+/// CustomPainter rendering a high-fidelity, photorealistic bionic prosthetic hand.
 class RealisticRoboticHandPainter extends CustomPainter {
   final HandPose pose;
   final HandState handState;
@@ -372,491 +399,540 @@ class RealisticRoboticHandPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0 || size.height <= 0) return;
 
-    // Palette & Material Colors
+    // Active power status / state color
     final accentColor = handState == HandState.stopped
         ? AppColors.emergencyRed
         : (handState.isMoving
             ? (isDark ? AppColors.primaryDark : AppColors.primaryLight)
             : (isDark ? AppColors.blueDark : AppColors.blueLight));
 
-    final baseSegmentDark =
-        isDark ? const Color(0xFF1E232B) : const Color(0xFFE2E7ED);
-    final baseSegmentLight =
-        isDark ? const Color(0xFF2E3846) : const Color(0xFFFFFFFF);
-    final jointTitanium =
-        isDark ? const Color(0xFF4A5568) : const Color(0xFF94A3B8);
-    final jointHighlight =
-        isDark ? const Color(0xFF718096) : const Color(0xFFCBD5E1);
-    final rubberTip =
-        isDark ? const Color(0xFF0F1216) : const Color(0xFF334155);
-    final seamColor =
-        isDark ? const Color(0xFF12161D) : const Color(0xFFCBD5E1);
+    // Dynamic metallic & aerospace composite materials
+    final metalDark = isDark ? const Color(0xFF1E2530) : const Color(0xFF94A3B8);
+    final metalMid = isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1);
+    final metalLight = isDark ? const Color(0xFF475569) : const Color(0xFFF1F5F9);
+    final carbonPlates = isDark ? const Color(0xFF0F172A) : const Color(0xFF64748B);
+    final titaniumKnuckle = isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8);
+    final chromeHighlight = isDark ? const Color(0xFF94A3B8) : const Color(0xFFFFFFFF);
+    final siliconeGrip = isDark ? const Color(0xFF090D16) : const Color(0xFF334155);
 
-    // Coordinate system: Hand spans roughly 240 x 300 reference units
-    final scale = math.min(size.width / 260.0, size.height / 320.0);
+    // Reference Coordinate System:
+    // Centered horizontally, wrist base near bottom
+    final scale = math.min(size.width / 260.0, size.height / 300.0);
     canvas.save();
-    canvas.translate(
-      size.width / 2.0,
-      size.height * 0.90, // Position wrist near bottom center
-    );
+    canvas.translate(size.width / 2.0, size.height * 0.90);
     canvas.scale(scale, scale);
 
-    // 1. Soft Floor Glow & Contact Shadow
-    _drawContactShadow(canvas, accentColor);
+    // 1. Soft Floor Contact Shadow
+    _drawContactShadow(canvas);
 
-    // 2. Wrist Cuff & Status LED Ring
-    _drawWristCuff(
+    // 2. Wrist Interface Socket & Status Ring
+    _drawWristSocket(canvas, metalDark, metalMid, metalLight, accentColor);
+
+    // 3. Ergonomic Bionic Palm Exoskeleton
+    _drawBionicPalm(canvas, metalDark, metalMid, metalLight, carbonPlates, titaniumKnuckle, accentColor);
+
+    // 4. Opposable Bionic Thumb (CMC swivel & flexion)
+    _drawOpposableThumb(
       canvas,
-      baseSegmentDark,
-      baseSegmentLight,
-      jointTitanium,
+      pose.thumbOpposition,
+      pose.thumbFlexion,
+      metalDark,
+      metalMid,
+      metalLight,
+      titaniumKnuckle,
+      siliconeGrip,
       accentColor,
     );
 
-    // 3. Engineered Paneled Palm with Bulge & Micro-screws
-    _drawEngineeredPalm(
+    // 5. Four Articulated Fingers (Index, Middle, Ring, Pinky) with natural 2.5D perspective curl
+    // Index Finger
+    _drawArticulatedFinger(
       canvas,
-      baseSegmentDark,
-      baseSegmentLight,
-      jointTitanium,
-      seamColor,
-      accentColor,
-    );
-
-    // 4. Five Articulated Fingers (Thumb, Index, Middle, Ring, Pinky)
-    // Thumb: Base on opposed left axis (-35°), 2 phalanges
-    _drawThumb(
-      canvas,
-      pose.thumbBaseAngle,
-      pose.thumbPipAngle,
-      pose.thumbDipAngle,
-      baseSegmentDark,
-      baseSegmentLight,
-      jointTitanium,
-      jointHighlight,
-      rubberTip,
-      accentColor,
-    );
-
-    // Fingers: Knuckle origins along curved palm arc
-    // Proportions: Index 0.92, Middle 1.00, Ring 0.94, Pinky 0.74
-    // Index
-    _drawFinger(
-      canvas,
-      baseOrigin: const Offset(-42, -152),
-      baseAngle: -6.0 * math.pi / 180.0,
-      lengthScale: 0.92,
-      mcpAngle: pose.indexMcpAngle,
-      pipAngle: pose.indexPipAngle,
-      dipAngle: pose.indexDipAngle,
-      baseSegmentDark: baseSegmentDark,
-      baseSegmentLight: baseSegmentLight,
-      jointTitanium: jointTitanium,
-      jointHighlight: jointHighlight,
-      rubberTip: rubberTip,
+      origin: const Offset(-38, -145),
+      baseSpreadRad: -0.07, // slight natural outward splay
+      lengthScale: 0.93,
+      width: 14.5,
+      flexion: pose.indexFlexion,
+      curlInwardFactor: 0.12,
+      metalDark: metalDark,
+      metalMid: metalMid,
+      metalLight: metalLight,
+      knuckleColor: titaniumKnuckle,
+      siliconeGrip: siliconeGrip,
       accentColor: accentColor,
     );
 
-    // Middle (Reference 1.00)
-    _drawFinger(
+    // Middle Finger (Primary Longest Digit)
+    _drawArticulatedFinger(
       canvas,
-      baseOrigin: const Offset(-14, -160),
-      baseAngle: -1.0 * math.pi / 180.0,
+      origin: const Offset(-12, -156),
+      baseSpreadRad: -0.01,
       lengthScale: 1.00,
-      mcpAngle: pose.middleMcpAngle,
-      pipAngle: pose.middlePipAngle,
-      dipAngle: pose.middleDipAngle,
-      baseSegmentDark: baseSegmentDark,
-      baseSegmentLight: baseSegmentLight,
-      jointTitanium: jointTitanium,
-      jointHighlight: jointHighlight,
-      rubberTip: rubberTip,
+      width: 15.0,
+      flexion: pose.middleFlexion,
+      curlInwardFactor: 0.04,
+      metalDark: metalDark,
+      metalMid: metalMid,
+      metalLight: metalLight,
+      knuckleColor: titaniumKnuckle,
+      siliconeGrip: siliconeGrip,
       accentColor: accentColor,
     );
 
-    // Ring
-    _drawFinger(
+    // Ring Finger
+    _drawArticulatedFinger(
       canvas,
-      baseOrigin: const Offset(15, -154),
-      baseAngle: 4.0 * math.pi / 180.0,
+      origin: const Offset(14, -150),
+      baseSpreadRad: 0.06,
       lengthScale: 0.94,
-      mcpAngle: pose.ringMcpAngle,
-      pipAngle: pose.ringPipAngle,
-      dipAngle: pose.ringDipAngle,
-      baseSegmentDark: baseSegmentDark,
-      baseSegmentLight: baseSegmentLight,
-      jointTitanium: jointTitanium,
-      jointHighlight: jointHighlight,
-      rubberTip: rubberTip,
+      width: 14.2,
+      flexion: pose.ringFlexion,
+      curlInwardFactor: -0.06,
+      metalDark: metalDark,
+      metalMid: metalMid,
+      metalLight: metalLight,
+      knuckleColor: titaniumKnuckle,
+      siliconeGrip: siliconeGrip,
       accentColor: accentColor,
     );
 
-    // Pinky
-    _drawFinger(
+    // Pinky Finger (Smallest, most splayed)
+    _drawArticulatedFinger(
       canvas,
-      baseOrigin: const Offset(42, -142),
-      baseAngle: 10.0 * math.pi / 180.0,
-      lengthScale: 0.76,
-      mcpAngle: pose.pinkyMcpAngle,
-      pipAngle: pose.pinkyPipAngle,
-      dipAngle: pose.pinkyDipAngle,
-      baseSegmentDark: baseSegmentDark,
-      baseSegmentLight: baseSegmentLight,
-      jointTitanium: jointTitanium,
-      jointHighlight: jointHighlight,
-      rubberTip: rubberTip,
+      origin: const Offset(38, -138),
+      baseSpreadRad: 0.14,
+      lengthScale: 0.78,
+      width: 13.0,
+      flexion: pose.pinkyFlexion,
+      curlInwardFactor: -0.16,
+      metalDark: metalDark,
+      metalMid: metalMid,
+      metalLight: metalLight,
+      knuckleColor: titaniumKnuckle,
+      siliconeGrip: siliconeGrip,
       accentColor: accentColor,
     );
 
     canvas.restore();
   }
 
-  void _drawContactShadow(Canvas canvas, Color accentColor) {
+  void _drawContactShadow(Canvas canvas) {
     final shadowPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          Colors.black.withAlpha(isDark ? 90 : 40),
+          Colors.black.withAlpha(isDark ? 100 : 45),
           Colors.transparent,
         ],
-      ).createShader(const Rect.fromLTWH(-100, -20, 200, 45));
-    canvas.drawOval(const Rect.fromLTWH(-95, -15, 190, 35), shadowPaint);
+      ).createShader(const Rect.fromLTWH(-90, -18, 180, 40));
+    canvas.drawOval(const Rect.fromLTWH(-85, -15, 170, 32), shadowPaint);
   }
 
-  void _drawWristCuff(
+  void _drawWristSocket(
     Canvas canvas,
-    Color bgDark,
-    Color bgLight,
-    Color titanium,
+    Color metalDark,
+    Color metalMid,
+    Color metalLight,
     Color accent,
   ) {
-    const cuffRect = Rect.fromLTWH(-48, -42, 96, 42);
-    final cuffRRect =
-        RRect.fromRectAndRadius(cuffRect, const Radius.circular(8));
+    // Structural wrist collar
+    const collarRect = Rect.fromLTWH(-46, -38, 92, 38);
+    final collarRRect = RRect.fromRectAndRadius(collarRect, const Radius.circular(8));
 
-    // Metallic Cuff Body
-    final cuffPaint = Paint()
+    final collarPaint = Paint()
       ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [bgLight, bgDark],
-      ).createShader(cuffRect);
-    canvas.drawRRect(cuffRRect, cuffPaint);
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [metalDark, metalMid, metalLight, metalDark],
+        stops: const [0.0, 0.35, 0.70, 1.0],
+      ).createShader(collarRect);
+    canvas.drawRRect(collarRRect, collarPaint);
 
-    // Vent Slots
+    // Lateral bevel chamfers
+    final chamferPaint = Paint()
+      ..color = Colors.black.withAlpha(isDark ? 90 : 35)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    canvas.drawRRect(collarRRect, chamferPaint);
+
+    // Heat dissipation vent channels
     final ventPaint = Paint()
-      ..color = isDark ? Colors.black45 : Colors.black12
-      ..strokeWidth = 2.0
+      ..color = isDark ? const Color(0xFF090D16) : const Color(0xFF64748B).withAlpha(120)
+      ..strokeWidth = 2.2
       ..strokeCap = StrokeCap.round;
     for (int i = -3; i <= 3; i++) {
-      final x = i * 11.0;
-      canvas.drawLine(Offset(x, -34), Offset(x, -14), ventPaint);
+      final x = i * 11.5;
+      canvas.drawLine(Offset(x, -30), Offset(x, -10), ventPaint);
     }
 
-    // Status LED Ring at Wrist Interface
-    final ledGlowPaint = Paint()
-      ..color = accent.withAlpha((100 + (pulsePhase * 120)).toInt())
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
+    // Glowing Servo Status LED Ring
+    final glowAlpha = (110 + (pulsePhase * 130)).toInt().clamp(0, 255);
+    final haloPaint = Paint()
+      ..color = accent.withAlpha(glowAlpha)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5.0);
     canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(-44, -45, 88, 5),
-        const Radius.circular(3),
-      ),
-      ledGlowPaint,
+      RRect.fromRectAndRadius(const Rect.fromLTWH(-42, -41, 84, 5), const Radius.circular(3)),
+      haloPaint,
     );
 
-    final ledCorePaint = Paint()
+    final ledPaint = Paint()
       ..color = accent
-      ..strokeWidth = 2.0;
-    canvas.drawLine(
-        const Offset(-42, -42.5), const Offset(42, -42.5), ledCorePaint);
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(const Offset(-40, -38.5), const Offset(40, -38.5), ledPaint);
   }
 
-  void _drawEngineeredPalm(
+  void _drawBionicPalm(
     Canvas canvas,
-    Color bgDark,
-    Color bgLight,
+    Color metalDark,
+    Color metalMid,
+    Color metalLight,
+    Color carbon,
     Color titanium,
-    Color seam,
     Color accent,
   ) {
+    // Contoured palm exoskeleton outline
     final palmPath = Path()
-      ..moveTo(-52, -45)
-      ..lineTo(-62, -100) // Thenar slope
-      ..lineTo(-50, -150) // Index base
-      ..lineTo(-20, -165) // Middle base
-      ..lineTo(22, -158) // Ring base
-      ..lineTo(54, -138) // Hypothenar slope
-      ..lineTo(52, -45)
+      ..moveTo(-48, -40)
+      ..lineTo(-60, -85) // Thenar muscular flare
+      ..lineTo(-54, -135) // Index knuckle base
+      ..lineTo(-22, -155) // Middle knuckle arch
+      ..lineTo(22, -150) // Ring knuckle arch
+      ..lineTo(54, -130) // Pinky hypothenar flare
+      ..lineTo(50, -85)
+      ..lineTo(48, -40)
       ..close();
 
-    // 1. Palm Main Plate with Top-Left Lighting
+    // 1. Palm Main Body with Cylindrical Anodized Finish
     final palmPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [bgLight, bgDark],
-      ).createShader(const Rect.fromLTWH(-65, -170, 130, 130));
+        colors: [metalLight, metalMid, metalDark],
+        stops: const [0.0, 0.45, 1.0],
+      ).createShader(const Rect.fromLTWH(-65, -160, 130, 125));
     canvas.drawPath(palmPath, palmPaint);
 
-    // 2. Beveled Center Plate
-    final centerPlate = Path()
-      ..moveTo(-32, -60)
-      ..lineTo(-38, -125)
-      ..lineTo(0, -145)
-      ..lineTo(34, -125)
-      ..lineTo(30, -60)
+    // 2. High-Tech Carbon Fiber Inlay Plate
+    final carbonPath = Path()
+      ..moveTo(-32, -55)
+      ..lineTo(-38, -118)
+      ..lineTo(0, -138)
+      ..lineTo(34, -118)
+      ..lineTo(30, -55)
       ..close();
 
-    final centerPaint = Paint()
+    final carbonPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
-          bgLight.withAlpha(isDark ? 180 : 230),
-          bgDark.withAlpha(isDark ? 220 : 255),
-        ],
-      ).createShader(const Rect.fromLTWH(-40, -150, 80, 100));
-    canvas.drawPath(centerPlate, centerPaint);
+        colors: [carbon, metalDark],
+      ).createShader(const Rect.fromLTWH(-40, -140, 80, 90));
+    canvas.drawPath(carbonPath, carbonPaint);
 
-    // Panel Seams
+    // Carbon Plate Perimeter Seam
     final seamPaint = Paint()
-      ..color = seam
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawPath(centerPlate, seamPaint);
+      ..color = titanium.withAlpha(isDark ? 160 : 200)
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+    canvas.drawPath(carbonPath, seamPaint);
 
-    // 3. Servo-Housing Bulge (Thenar Axis)
+    // 3. Actuator Tendon Cable Channels (4 linear guides running from wrist to knuckles)
+    final tendonPaint = Paint()
+      ..color = isDark ? const Color(0xFF0F172A) : const Color(0xFF64748B).withAlpha(140)
+      ..strokeWidth = 2.0;
+    final tendonWires = Paint()
+      ..color = titanium
+      ..strokeWidth = 1.0;
+
+    final tendonX = [-26.0, -8.0, 9.0, 24.0];
+    final knuckleY = [-142.0, -152.0, -146.0, -135.0];
+
+    for (int i = 0; i < 4; i++) {
+      final start = Offset(tendonX[i] * 0.7, -46);
+      final end = Offset(tendonX[i], knuckleY[i]);
+      canvas.drawLine(start, end, tendonPaint);
+      canvas.drawLine(start, end, tendonWires);
+    }
+
+    // 4. Thenar Servo Chamber (Motor bulge on thumb lateral edge)
     final thenarBulge = Paint()
       ..shader = RadialGradient(
-        center: const Alignment(-0.6, -0.2),
+        center: const Alignment(-0.4, -0.2),
         radius: 0.8,
-        colors: [
-          titanium.withAlpha(isDark ? 160 : 200),
-          bgDark,
-        ],
-      ).createShader(const Rect.fromLTWH(-68, -115, 38, 55));
-    canvas.drawOval(const Rect.fromLTWH(-66, -112, 34, 48), thenarBulge);
+        colors: [titanium.withAlpha(isDark ? 160 : 220), metalDark],
+      ).createShader(const Rect.fromLTWH(-68, -110, 36, 50));
+    canvas.drawOval(const Rect.fromLTWH(-66, -106, 32, 44), thenarBulge);
 
-    // 4. Micro-screws / Fasteners
+    // 5. Structural Titanium Fasteners (Hex Screws)
     final screwPositions = [
-      const Offset(-28, -68),
-      const Offset(26, -68),
-      const Offset(-32, -120),
-      const Offset(28, -120),
-      const Offset(0, -140),
+      const Offset(-26, -62),
+      const Offset(24, -62),
+      const Offset(-32, -114),
+      const Offset(28, -114),
+      const Offset(0, -132),
     ];
     final screwPaint = Paint()..color = titanium;
     final screwSlot = Paint()
-      ..color = seam
-      ..strokeWidth = 1.0;
+      ..color = isDark ? Colors.black : Colors.white
+      ..strokeWidth = 0.9;
     for (final pos in screwPositions) {
-      canvas.drawCircle(pos, 2.2, screwPaint);
-      canvas.drawLine(
-        Offset(pos.dx - 1.2, pos.dy),
-        Offset(pos.dx + 1.2, pos.dy),
-        screwSlot,
-      );
+      canvas.drawCircle(pos, 2.4, screwPaint);
+      canvas.drawLine(Offset(pos.dx - 1.4, pos.dy), Offset(pos.dx + 1.4, pos.dy), screwSlot);
     }
   }
 
-  void _drawThumb(
+  void _drawOpposableThumb(
     Canvas canvas,
-    double baseAngleDeg,
-    double pipAngleDeg,
-    double dipAngleDeg,
-    Color bgDark,
-    Color bgLight,
+    double opposition,
+    double flexion,
+    Color metalDark,
+    Color metalMid,
+    Color metalLight,
     Color titanium,
-    Color titaniumHl,
-    Color rubber,
+    Color silicone,
     Color accent,
   ) {
     canvas.save();
-    // Origin at Thenar pivot
-    canvas.translate(-52, -88);
-    // Base orientation (-38° from vertical + dynamic opposition angle)
-    final baseRad = (-38.0 + baseAngleDeg * 0.45) * math.pi / 180.0;
-    canvas.rotate(baseRad);
+    // Origin at the Thenar base pivot
+    canvas.translate(-50, -82);
+
+    // Opposition kinematics:
+    // When open (0.0): Splayed outward at -40°
+    // When closed (1.0): Sweeps inward across the palm (+18°) toward index/middle fingers
+    final sweepAngle = (-40.0 + (opposition * 58.0)) * math.pi / 180.0;
+    canvas.rotate(sweepAngle);
 
     // 1. Metacarpal Base Segment
-    _drawSegment(
+    _drawPhalanxSegment(
       canvas,
-      width: 17,
-      length: 34,
-      bgDark: bgDark,
-      bgLight: bgLight,
+      width: 17.5,
+      length: 32.0,
+      metalDark: metalDark,
+      metalMid: metalMid,
+      metalLight: metalLight,
+      siliconeGrip: silicone,
+      showGripPad: true,
+      gripOnRightSide: true,
     );
 
-    // MCP Joint
-    _drawJointCap(canvas, 9.5, titanium, titaniumHl, accent);
+    // MCP Joint Swivel
+    _drawKnuckleHinge(canvas, 10.0, titanium, accent);
 
     // 2. Proximal Phalanx
-    canvas.translate(0, -34);
-    final pipRad = (pipAngleDeg * 0.45) * math.pi / 180.0;
-    canvas.rotate(pipRad);
-    _drawSegment(
+    canvas.translate(0, -32.0);
+    final pipCurl = (flexion * 42.0) * math.pi / 180.0;
+    canvas.rotate(pipCurl);
+
+    _drawPhalanxSegment(
       canvas,
-      width: 15,
-      length: 28,
-      bgDark: bgDark,
-      bgLight: bgLight,
+      width: 15.5,
+      length: 27.0,
+      metalDark: metalDark,
+      metalMid: metalMid,
+      metalLight: metalLight,
+      siliconeGrip: silicone,
+      showGripPad: true,
+      gripOnRightSide: true,
     );
 
-    // PIP Joint
-    _drawJointCap(canvas, 8.5, titanium, titaniumHl, accent);
+    // IP Joint
+    _drawKnuckleHinge(canvas, 8.8, titanium, accent);
 
-    // 3. Distal Phalanx with Rubber Grip
-    canvas.translate(0, -28);
-    final dipRad = (dipAngleDeg * 0.45) * math.pi / 180.0;
-    canvas.rotate(dipRad);
-    _drawDistalPhalanx(
+    // 3. Distal Phalanx & Soft High-Traction Thumb Pad
+    canvas.translate(0, -27.0);
+    final dipCurl = (flexion * 38.0) * math.pi / 180.0;
+    canvas.rotate(dipCurl);
+
+    _drawBionicFingertip(
       canvas,
-      width: 13,
-      length: 24,
-      bgDark: bgDark,
-      bgLight: bgLight,
-      rubber: rubber,
+      width: 14.0,
+      length: 24.0,
+      metalDark: metalDark,
+      metalMid: metalMid,
+      metalLight: metalLight,
+      silicone: silicone,
+      accent: accent,
     );
 
     canvas.restore();
   }
 
-  void _drawFinger(
+  void _drawArticulatedFinger(
     Canvas canvas, {
-    required Offset baseOrigin,
-    required double baseAngle,
+    required Offset origin,
+    required double baseSpreadRad,
     required double lengthScale,
-    required double mcpAngle,
-    required double pipAngle,
-    required double dipAngle,
-    required Color baseSegmentDark,
-    required Color baseSegmentLight,
-    required Color jointTitanium,
-    required Color jointHighlight,
-    required Color rubberTip,
+    required double width,
+    required double flexion,
+    required double curlInwardFactor,
+    required Color metalDark,
+    required Color metalMid,
+    required Color metalLight,
+    required Color knuckleColor,
+    required Color siliconeGrip,
     required Color accentColor,
   }) {
     canvas.save();
-    canvas.translate(baseOrigin.dx, baseOrigin.dy);
-    canvas.rotate(baseAngle);
+    canvas.translate(origin.dx, origin.dy);
 
-    // Phalanx Dimensions
-    final p1Len = 38.0 * lengthScale;
-    final p2Len = 29.0 * lengthScale;
-    final p3Len = 24.0 * lengthScale;
-    final fWidth = 14.0 * lengthScale;
+    // Base alignment + natural convergence toward palm midline as hand closes
+    final dynamicSpread = baseSpreadRad + (flexion * curlInwardFactor);
+    canvas.rotate(dynamicSpread);
 
-    // MCP Joint
-    _drawJointCap(
-        canvas, fWidth * 0.60, jointTitanium, jointHighlight, accentColor);
+    // Segment lengths (anatomical scale)
+    final p1Length = 38.0 * lengthScale;
+    final p2Length = 28.0 * lengthScale;
+    final p3Length = 24.0 * lengthScale;
 
-    // MCP Curl
-    final mcpRad = (mcpAngle * 0.48) * math.pi / 180.0;
-    canvas.rotate(mcpRad);
+    // 1. MCP Base Knuckle (Chassis Joint)
+    _drawKnuckleHinge(canvas, width * 0.62, knuckleColor, accentColor);
 
-    // 1. Proximal Phalanx
-    _drawSegment(
+    // 2. Proximal Phalanx
+    // In 2.5D perspective, as the finger curls forward into a grip,
+    // the segment foreshortens along the vertical axis
+    final p1Foreshorten = (1.0 - (flexion * 0.42)).clamp(0.45, 1.0);
+    final p1EffectiveLength = p1Length * p1Foreshorten;
+
+    _drawPhalanxSegment(
       canvas,
-      width: fWidth,
-      length: p1Len,
-      bgDark: baseSegmentDark,
-      bgLight: baseSegmentLight,
-    );
-    _drawTendonCable(canvas, fWidth, p1Len, accentColor);
-
-    // PIP Joint
-    canvas.translate(0, -p1Len);
-    _drawJointCap(
-      canvas,
-      fWidth * 0.54,
-      jointTitanium,
-      jointHighlight,
-      accentColor,
+      width: width,
+      length: p1EffectiveLength,
+      metalDark: metalDark,
+      metalMid: metalMid,
+      metalLight: metalLight,
+      siliconeGrip: siliconeGrip,
+      showGripPad: true,
+      gripOnRightSide: false,
     );
 
-    // PIP Curl
-    final pipRad = (pipAngle * 0.52) * math.pi / 180.0;
-    canvas.rotate(pipRad);
+    // 3. PIP Knuckle Hinge
+    canvas.translate(0, -p1EffectiveLength);
+    final p2Foreshorten = (1.0 - (flexion * 0.48)).clamp(0.38, 1.0);
+    final p2EffectiveLength = p2Length * p2Foreshorten;
 
-    // 2. Middle Phalanx
-    _drawSegment(
-      canvas,
-      width: fWidth * 0.88,
-      length: p2Len,
-      bgDark: baseSegmentDark,
-      bgLight: baseSegmentLight,
-    );
-    _drawTendonCable(canvas, fWidth * 0.88, p2Len, accentColor);
+    _drawKnuckleHinge(canvas, width * 0.54, knuckleColor, accentColor);
 
-    // DIP Joint
-    canvas.translate(0, -p2Len);
-    _drawJointCap(
+    // 4. Intermediate Phalanx
+    _drawPhalanxSegment(
       canvas,
-      fWidth * 0.48,
-      jointTitanium,
-      jointHighlight,
-      accentColor,
+      width: width * 0.88,
+      length: p2EffectiveLength,
+      metalDark: metalDark,
+      metalMid: metalMid,
+      metalLight: metalLight,
+      siliconeGrip: siliconeGrip,
+      showGripPad: true,
+      gripOnRightSide: false,
     );
 
-    // DIP Curl
-    final dipRad = (dipAngle * 0.52) * math.pi / 180.0;
-    canvas.rotate(dipRad);
+    // 5. DIP Knuckle Hinge
+    canvas.translate(0, -p2EffectiveLength);
+    final p3Foreshorten = (1.0 - (flexion * 0.52)).clamp(0.34, 1.0);
+    final p3EffectiveLength = p3Length * p3Foreshorten;
 
-    // 3. Distal Phalanx & Fingertip Pad
-    _drawDistalPhalanx(
+    _drawKnuckleHinge(canvas, width * 0.48, knuckleColor, accentColor);
+
+    // 6. Distal Phalanx & Tactile Bionic Fingertip
+    _drawBionicFingertip(
       canvas,
-      width: fWidth * 0.78,
-      length: p3Len,
-      bgDark: baseSegmentDark,
-      bgLight: baseSegmentLight,
-      rubber: rubberTip,
+      width: width * 0.80,
+      length: p3EffectiveLength,
+      metalDark: metalDark,
+      metalMid: metalMid,
+      metalLight: metalLight,
+      silicone: siliconeGrip,
+      accent: accentColor,
     );
 
     canvas.restore();
   }
 
-  void _drawSegment(
+  void _drawPhalanxSegment(
     Canvas canvas, {
     required double width,
     required double length,
-    required Color bgDark,
-    required Color bgLight,
+    required Color metalDark,
+    required Color metalMid,
+    required Color metalLight,
+    required Color siliconeGrip,
+    required bool showGripPad,
+    required bool gripOnRightSide,
   }) {
     final rect = Rect.fromLTWH(-width / 2.0, -length, width, length);
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(3.5));
 
-    // Linear Material Gradient
-    final paint = Paint()
+    // Metallic cylindrical gradient
+    final shellPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
-        colors: [bgLight, bgDark],
+        colors: [metalLight, metalMid, metalDark],
+        stops: const [0.0, 0.5, 1.0],
       ).createShader(rect);
-    canvas.drawRRect(rrect, paint);
+    canvas.drawRRect(rrect, shellPaint);
 
-    // Beveled Edge Highlight
+    // Specular Chamfer Highlight along top edge
     final hlPaint = Paint()
-      ..color = Colors.white.withAlpha(isDark ? 40 : 120)
+      ..color = Colors.white.withAlpha(isDark ? 55 : 140)
       ..strokeWidth = 1.0;
-    canvas.drawLine(
-      Offset(-width / 2.0 + 1, -length + 2),
-      Offset(-width / 2.0 + 1, -2),
-      hlPaint,
-    );
+    canvas.drawLine(Offset(-width / 2.0 + 1, -length + 1.5), Offset(width / 2.0 - 1, -length + 1.5), hlPaint);
+
+    // Titanium Tendon Line (central high-strength core cable)
+    final cablePaint = Paint()
+      ..color = isDark ? const Color(0xFF0F172A) : const Color(0xFF64748B)
+      ..strokeWidth = 2.0;
+    canvas.drawLine(Offset(0, -length + 3), Offset(0, -3), cablePaint);
+
+    // Tactile Silicone Grip Treads on contact surface
+    if (showGripPad) {
+      final padWidth = width * 0.35;
+      final padX = gripOnRightSide ? (width / 2.0 - padWidth) : (-width / 2.0);
+      final padRect = Rect.fromLTWH(padX, -length + 3, padWidth, length - 6);
+      final padPaint = Paint()..color = siliconeGrip;
+      canvas.drawRRect(RRect.fromRectAndRadius(padRect, const Radius.circular(2)), padPaint);
+
+      // Grooves / Treads
+      final treadPaint = Paint()
+        ..color = isDark ? const Color(0xFF1E293B) : const Color(0xFFCBD5E1)
+        ..strokeWidth = 1.0;
+      final step = (length - 8) / 3.0;
+      for (int i = 1; i <= 2; i++) {
+        final y = -length + 4 + (i * step);
+        canvas.drawLine(Offset(padX + 1, y), Offset(padX + padWidth - 1, y), treadPaint);
+      }
+    }
   }
 
-  void _drawDistalPhalanx(
+  void _drawKnuckleHinge(Canvas canvas, double radius, Color titanium, Color accent) {
+    // Outer Titanium Cylinder Cap
+    final outerPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [titanium, isDark ? const Color(0xFF1E293B) : const Color(0xFF64748B)],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: radius));
+    canvas.drawCircle(Offset.zero, radius, outerPaint);
+
+    // Inner Concentric Chrome Pin
+    final chromePaint = Paint()..color = isDark ? const Color(0xFFCBD5E1) : Colors.white;
+    canvas.drawCircle(Offset.zero, radius * 0.50, chromePaint);
+
+    // Pivot Pin Axle Center
+    final axlePaint = Paint()..color = isDark ? const Color(0xFF0F172A) : const Color(0xFF334155);
+    canvas.drawCircle(Offset.zero, radius * 0.22, axlePaint);
+  }
+
+  void _drawBionicFingertip(
     Canvas canvas, {
     required double width,
     required double length,
-    required Color bgDark,
-    required Color bgLight,
-    required Color rubber,
+    required Color metalDark,
+    required Color metalMid,
+    required Color metalLight,
+    required Color silicone,
+    required Color accent,
   }) {
-    final rect = Rect.fromLTWH(-width / 2.0, -length, width, length);
-    final path = Path()
+    final tipPath = Path()
       ..moveTo(-width / 2.0, 0)
-      ..lineTo(-width / 2.0, -length + (width / 2.0))
+      ..lineTo(-width / 2.0, -length * 0.60)
       ..quadraticBezierTo(
         -width / 2.0,
         -length,
@@ -867,77 +943,55 @@ class RealisticRoboticHandPainter extends CustomPainter {
         width / 2.0,
         -length,
         width / 2.0,
-        -length + (width / 2.0),
+        -length * 0.60,
       )
       ..lineTo(width / 2.0, 0)
       ..close();
 
-    final paint = Paint()
+    // Metallic Exoskeleton Armor
+    final armorPaint = Paint()
       ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [bgLight, bgDark],
-      ).createShader(rect);
-    canvas.drawPath(path, paint);
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [metalLight, metalMid, metalDark],
+      ).createShader(Rect.fromLTWH(-width / 2.0, -length, width, length));
+    canvas.drawPath(tipPath, armorPaint);
 
-    // Rubber Friction Pad at Tip
-    final padPaint = Paint()..color = rubber;
+    // High-Traction Ergonomic Fingertip Sensor Pad
     final padPath = Path()
-      ..moveTo(-width * 0.38, -length + 4)
-      ..quadraticBezierTo(0, -length + 1, width * 0.38, -length + 4)
-      ..quadraticBezierTo(0, -length + 7, -width * 0.38, -length + 4)
+      ..moveTo(-width * 0.35, -2)
+      ..lineTo(-width * 0.35, -length * 0.75)
+      ..quadraticBezierTo(
+        -width * 0.20,
+        -length + 2,
+        0,
+        -length + 2,
+      )
+      ..quadraticBezierTo(
+        width * 0.20,
+        -length + 2,
+        width * 0.35,
+        -length * 0.75,
+      )
+      ..lineTo(width * 0.35, -2)
       ..close();
+
+    final padPaint = Paint()..color = silicone;
     canvas.drawPath(padPath, padPaint);
-  }
 
-  void _drawJointCap(
-    Canvas canvas,
-    double radius,
-    Color titanium,
-    Color titaniumHl,
-    Color accent,
-  ) {
-    // Outer Joint Disc
-    final discPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [titaniumHl, titanium],
-      ).createShader(Rect.fromCircle(center: Offset.zero, radius: radius));
-    canvas.drawCircle(Offset.zero, radius, discPaint);
-
-    // Inner Axle Pin with State Accent Center
-    canvas.drawCircle(
-      Offset.zero,
-      radius * 0.50,
-      Paint()..color = isDark ? Colors.black54 : Colors.black26,
-    );
-    canvas.drawCircle(
-      Offset.zero,
-      radius * 0.28,
-      Paint()..color = accent,
-    );
-  }
-
-  void _drawTendonCable(
-    Canvas canvas,
-    double width,
-    double length,
-    Color accent,
-  ) {
-    final cablePaint = Paint()
-      ..color = accent.withAlpha(isDark ? 80 : 120)
-      ..strokeWidth = 1.0;
-    canvas.drawLine(
-      const Offset(0, -2),
-      Offset(0, -length + 2),
-      cablePaint,
-    );
+    // Micro Tactile Sensor Dot Indicator
+    final sensorPaint = Paint()..color = accent.withAlpha(isDark ? 220 : 180);
+    canvas.drawCircle(Offset(0, -length + 4.5), 1.4, sensorPaint);
   }
 
   @override
   bool shouldRepaint(covariant RealisticRoboticHandPainter oldDelegate) {
-    return oldDelegate.currentAngle != currentAngle ||
+    return oldDelegate.pose != pose ||
         oldDelegate.handState != handState ||
         oldDelegate.isDark != isDark ||
-        (handState.isMoving && oldDelegate.pulsePhase != pulsePhase);
+        oldDelegate.pulsePhase != pulsePhase ||
+        oldDelegate.currentAngle != currentAngle ||
+        oldDelegate.minAngle != minAngle ||
+        oldDelegate.maxAngle != maxAngle;
   }
 }

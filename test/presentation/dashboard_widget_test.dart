@@ -133,7 +133,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.textContaining('LOW BATTERY'), findsWidgets);
-      expect(find.textContaining('Battery: 18%'), findsOneWidget);
+      expect(find.textContaining('LOW BATTERY  Battery: 18%'), findsOneWidget);
 
       // Recharge to 100%
       await deviceService.triggerDemoBatteryDrain(100.0);

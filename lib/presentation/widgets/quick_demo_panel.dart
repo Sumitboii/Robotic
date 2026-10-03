@@ -129,7 +129,7 @@ class _QuickDemoPanelState extends State<QuickDemoPanel> {
               _buildActionButton(
                 context,
                 icon: Icons.sensors,
-                label: 'Trigger EMG Spike (+170 μV)',
+                label: 'Trigger EMG Spike (+170 uV)',
                 color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
                 onPressed: () {
                   widget.deviceService.triggerEmgSpike(170.0);
