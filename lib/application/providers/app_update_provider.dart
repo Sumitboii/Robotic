@@ -59,7 +59,7 @@ class AppUpdateNotifier extends StateNotifier<AppUpdateInfo> {
   AppUpdateNotifier() : super(const AppUpdateInfo());
 
   static const String apkDownloadUrl =
-      'https://github.com/Sumitboii/Robotic/releases/download/v1.0.1/app-release.apk';
+      'https://sumitboii.github.io/Robotic/synthera-prosthetic-hand.apk';
 
   void dismissBanner() {
     state = state.copyWith(isBannerDismissed: true);

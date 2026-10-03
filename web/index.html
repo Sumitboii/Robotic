@@ -9,6 +9,11 @@
   <meta name="description" content="Clinical Companion Application & Embedded Kinematics Simulator for Synthera DAKSH-01 Prosthetic Hand.">
   <meta name="theme-color" content="#0A0E17">
 
+  <!-- Aggressive cache control for instant updates on iOS & Android -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -31,6 +36,17 @@
       overflow: hidden;
     }
   </style>
+
+  <script>
+    // Invalidate stale Service Worker cache on mobile Safari and Chrome
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (let registration of registrations) {
+          registration.update();
+        }
+      });
+    }
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
